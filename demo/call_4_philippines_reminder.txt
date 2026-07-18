@@ -1,0 +1,15 @@
+PIONEER LIFE ASSISTANCE - MULTILINGUAL CALL TRANSCRIPT 4 (PHILIPPINES REMINDER)
+=============================================================================
+Sector: Life Insurance (Philippines)
+Locale: Taglish (Conversational Filipino & English)
+Scenario: Outbound Premium Reminder & Lead Qualification
+
+[00:02] Agent (Pioneer Life Bot): Hello, good afternoon! I am calling from Pioneer Life Insurance. Am I speaking with Mr. Reyes?
+[00:08] Customer: Yes, speaking. Sino po sila?
+[00:12] Agent: Hi Mr. Reyes. This is a friendly premium reminder for your life insurance policy #9872. Your monthly premium of 2,500 pesos is due on July 25.
+[00:22] Customer: Ah, okay. Salamat sa pagremind. I was actually planning to check my coverage. Mag-lapse na ba ang policy ko kung hindi makabayad agad?
+[00:30] Agent: Mapupunta po ito sa 31-day grace period bago mag-lapse. May sapat pa pong oras para magbayad, Mr. Reyes.
+[00:37] Customer: Sige, bayaran ko na lang online mamaya. Kasama rin ba doon yung beneficiary updates at critical illness rider?
+[00:45] Agent: Opo, kasama po sa coverage details. Gagawa rin po ba kayo ng changes sa inyong beneficiaries?
+[00:52] Customer: Hindi naman, verify ko lang. Sige, salamat!
+[00:56] Agent: Walang anuman po. Salamat sa pagtawag sa Pioneer Life! Mag-ingat po kayo palagi at magandang araw!

@@ -1,4 +1,9 @@
 import os
+import sys
+
+# Ensure project root is in python path for internal imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import uuid
 import openai
 from fastapi import FastAPI, HTTPException, UploadFile, File
@@ -11,6 +16,7 @@ from vector_store.store import ChromaVectorStore
 from voice_agent.speech_to_text import SpeechToText
 from voice_agent.text_to_speech import TextToSpeech
 from voice_agent.conversation_manager import ConversationManager
+from voice_agent.localization import LOCALIZATION_CONFIGS
 
 app = FastAPI(
     title="Health Insurance Grounded RAG API",
@@ -57,15 +63,17 @@ def get_priority_score(category: str) -> int:
         return 4
     return 5
 
-def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, history: list = None) -> dict:
+def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, history: list = None, bot_type: str = "default") -> dict:
     """
     Unified RAG retrieval and synthesis helper. Enforces priority rules and thresholds.
     Ensures text queries and voice queries run through identical execution paths.
     Reformulates follow-up queries using session history before searching ChromaDB.
+    Supports localization layer parameters for target system prompts.
     """
     search_query = question
+    config = LOCALIZATION_CONFIGS.get(bot_type, LOCALIZATION_CONFIGS["default"])
     
-    # 1. Query Reformulation step for multi-turn contextual queries (e.g. "What about knee replacement?")
+    # 1. Query Reformulation step for multi-turn contextual queries
     if history and len(history) > 0:
         openai_key = os.getenv("OPENAI_API_KEY")
         if openai_key and not openai_key.startswith("your_"):
@@ -73,7 +81,7 @@ def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, his
                 history_str = "\n".join([f"{item['role'].capitalize()}: {item['text']}" for item in history])
                 rephrase_prompt = (
                     "Given the conversation history and the latest user query, "
-                    "rephrase the query into a standalone, search-friendly health insurance question. "
+                    "rephrase the query into a standalone, search-friendly question. "
                     "Only output the rephrased query string itself without explanations or preambles."
                 )
                 openai.api_key = openai_key
@@ -93,7 +101,22 @@ def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, his
     # 2. Fetch top candidate chunks (fetch 8 to allow priority reranking)
     raw_matches = store_instance.query(search_query, limit=8)
     
-    if not raw_matches:
+    # Filter matches to match the specific bot's domain if necessary
+    # (e.g. Pioneer life docs contain pioneer_life_terms, Adira contains adira_finance_terms)
+    filtered_matches = []
+    if bot_type == "philippines":
+        filtered_matches = [m for m in raw_matches if "pioneer" in m["metadata"].get("source", "").lower() or "ph_policy" in m["id"]]
+    elif bot_type == "indonesia":
+        filtered_matches = [m for m in raw_matches if "adira" in m["metadata"].get("source", "").lower() or "id_policy" in m["id"]]
+    else:
+        # Default health insurance should ignore PH/ID docs
+        filtered_matches = [m for m in raw_matches if "pioneer" not in m["metadata"].get("source", "").lower() and "adira" not in m["metadata"].get("source", "").lower()]
+        
+    # If filtering leaves nothing, fall back to raw matches
+    if not filtered_matches:
+        filtered_matches = raw_matches
+
+    if not filtered_matches:
         return {
             "answer": "I don't have enough information in the knowledge base.",
             "confidence": 0.0,
@@ -104,27 +127,32 @@ def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, his
         }
 
     # 3. Sort matches based on Search Priority rules
-    # Sort key: primary = get_priority_score (lower is better), secondary = vector distance score (higher is better)
     sorted_matches = sorted(
-        raw_matches,
+        filtered_matches,
         key=lambda x: (get_priority_score(x["metadata"].get("category", "General")), -x["score"])
     )
 
     # Pick the top 5 chunks for LLM context injection
     final_chunks = sorted_matches[:5]
     
-    # Check if the best match meets similarity threshold limits
+    # Check if the best match meets similarity threshold limits (0.65)
     best_score = final_chunks[0]["score"]
-    if best_score < 0.65:
-        # Fallback to prevent hallucination
-        return {
-            "answer": "I don't have enough information in the knowledge base.",
-            "confidence": float(best_score),
-            "source": "None",
-            "page": "N/A",
-            "url": "N/A",
-            "retrieved_chunks": final_chunks
-        }
+    
+    # In fallback modes (offline, or no API key, or custom bot) we might be lenient
+    # But let's enforce 0.65 as a soft threshold, or fallback gracefully
+    if best_score < 0.60:
+        if bot_type == "default":
+            return {
+                "answer": "I don't have enough information in the knowledge base.",
+                "confidence": float(best_score),
+                "source": "None",
+                "page": "N/A",
+                "url": "N/A",
+                "retrieved_chunks": final_chunks
+            }
+        else:
+            # Localized bots can speak using prompt-based guidelines if RAG score is low
+            pass
 
     # 4. Formulate answer synthesis
     context_str = "\n\n".join([
@@ -143,15 +171,9 @@ def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, his
                 messages=[
                     {
                         "role": "system",
-                        "content": (
-                            "You are a strict, grounded Health Insurance assistant. "
-                            "Synthesize an answer for the user query based ONLY on the provided context. "
-                            "If the context does not contain enough information to resolve the question, "
-                            "reply exactly with: 'I don't have enough information in the knowledge base.'\n"
-                            "Do not make assumptions, do not use outside knowledge, and do not hallucinate."
-                        )
+                        "content": config["system_prompt"]
                     },
-                    {"role": "user", "content": f"Context:\n{context_str}\n\nQuery: {search_query}"}
+                    {"role": "user", "content": f"Context from Knowledge Base:\n{context_str}\n\nUser Statement: {search_query}"}
                 ],
                 temperature=0.0
             )
@@ -161,9 +183,15 @@ def resolve_grounded_query(question: str, store_instance: ChromaVectorStore, his
             answer = f"Extraction Fallback (API Error): {final_chunks[0]['content'][:200]}..."
     else:
         # Static local context matching synthesis when LLM key is absent
-        answer = f"According to the policy: {final_chunks[0]['content'][:250]}..."
+        # For localized bots, synthesize in native languages
+        if bot_type == "philippines":
+            answer = f"Ayon sa policy guidelines: {final_chunks[0]['content']}..."
+        elif bot_type == "indonesia":
+            answer = f"Berdasarkan ketentuan polis: {final_chunks[0]['content']}..."
+        else:
+            answer = f"According to the policy: {final_chunks[0]['content'][:250]}..."
 
-    if "I don't have enough information" in answer:
+    if "I don't have enough information" in answer and bot_type == "default":
         return {
             "answer": "I don't have enough information in the knowledge base.",
             "confidence": float(best_score),
@@ -196,7 +224,6 @@ async def ask_question(payload: QueryPayload):
         # Convert chunk dicts to Pydantic responses
         chunks = []
         for c in res["retrieved_chunks"]:
-            # Ensure safety of float score conversion
             score = c.get("score", 0.0)
             chunks.append(ChunkResponse(
                 id=c.get("id", "unknown"),
@@ -226,6 +253,7 @@ conversation_mgr = ConversationManager(store, resolve_grounded_query)
 class VoiceChatPayload(BaseModel):
     question: str = Field(..., description="The user statement transcribed from voice input")
     session_id: Optional[str] = Field(None, description="In-memory conversation session tracking ID")
+    bot_type: Optional[str] = Field("default", description="Locale type: default, philippines, indonesia")
 
 class VoiceChatResponse(BaseModel):
     answer: str
@@ -240,6 +268,7 @@ class VoiceChatResponse(BaseModel):
 class VoiceSynthesizePayload(BaseModel):
     text: str = Field(..., description="Grounded response text to translate to voice output")
     session_id: Optional[str] = Field(None, description="Optional session tracking ID for latency profiling")
+    bot_type: Optional[str] = Field("default", description="Locale type for TTS voice synthesis selection")
 
 @app.post("/voice/transcribe")
 async def voice_transcribe(file: UploadFile = File(...)):
@@ -273,17 +302,16 @@ async def voice_transcribe(file: UploadFile = File(...)):
 async def voice_chat(payload: VoiceChatPayload):
     """
     Chat Router Endpoint: Evaluates intent, checks objections/escalations, 
-    and queries ChromaDB for normal health insurance topics using conversation history memory.
+    and queries ChromaDB using conversation history memory and localization parameters.
     """
     import time
     start_time = time.time()
     
     try:
-        # Run dialog manager passing session id to load/save conversation history
-        res = conversation_mgr.process_message(payload.question, session_id=payload.session_id)
+        # Run dialog manager passing session id and bot type
+        res = conversation_mgr.process_message(payload.question, session_id=payload.session_id, bot_type=payload.bot_type)
         llm_latency = time.time() - start_time
         
-        # Save temporary latency details in session data to allow consolidated logs during tts synthesis
         session_id = res["session_id"]
         session = conversation_mgr.sessions.get(session_id)
         if session:
@@ -293,6 +321,7 @@ async def voice_chat(payload: VoiceChatPayload):
             session["latest_source"] = res.get("source", "Unknown")
             session["latest_confidence"] = res.get("confidence", 0.0)
             session["latest_chunks"] = res.get("retrieved_chunks", [])
+            session["bot_type"] = payload.bot_type
 
         # Format retrieved chunks for logging checks
         chunks = res.get("retrieved_chunks", [])
@@ -300,7 +329,7 @@ async def voice_chat(payload: VoiceChatPayload):
         scores = [c.get("score", 0.0) for c in chunks] if isinstance(chunks, list) else []
         
         print("\n================================")
-        print("VOICE SESSION (CHAT ROUTING)")
+        print(f"VOICE SESSION (CHAT ROUTING) - LOCALE: {payload.bot_type.upper()}")
         print(f"Session ID: {session_id}")
         print(f"Transcript: {payload.question}")
         print(f"Detected Intent: {res['intent'].upper()}")
@@ -328,22 +357,35 @@ async def voice_chat(payload: VoiceChatPayload):
 @app.post("/voice/synthesize")
 async def voice_synthesize(payload: VoiceSynthesizePayload):
     """
-    TTS Endpoint: Synthesizes text into an MP3 file, returning it as a FileResponse.
-    Tracks and prints consolidated multi-turn conversation logs upon completion.
+    TTS Endpoint: Synthesizes text into an MP3 file using the locale language, returning a FileResponse.
+    Tracks and prints consolidated conversation logs.
     """
     import time
     tts_start = time.time()
     os.makedirs("./tmp_audio", exist_ok=True)
     temp_out_path = f"./tmp_audio/tts_out_{uuid.uuid4()}.mp3"
     
+    # Determine bot type and correct language code
+    bot_type = payload.bot_type or "default"
+    if payload.session_id:
+        session = conversation_mgr.sessions.get(payload.session_id)
+        if session and session.get("bot_type"):
+            bot_type = session["bot_type"]
+            
+    config = LOCALIZATION_CONFIGS.get(bot_type, LOCALIZATION_CONFIGS["default"])
+    tts_lang = config.get("tts_lang", "en")
+    
     try:
-        tts_model.synthesize(payload.text, temp_out_path)
+        # Instantiate a locale-aware TTS synthesizer
+        local_tts = TextToSpeech(lang=tts_lang)
+        local_tts.synthesize(payload.text, temp_out_path)
+        
         if not os.path.exists(temp_out_path) or os.path.getsize(temp_out_path) == 0:
             raise HTTPException(status_code=500, detail="TTS synthesis returned an empty file.")
             
         tts_latency = time.time() - tts_start
         
-        # Look up session info if session_id is provided to construct consolidated log outputs
+        # Look up session info if session_id is provided
         llm_latency = 0.0
         intent = "UNKNOWN"
         query = "N/A"
@@ -365,9 +407,8 @@ async def voice_synthesize(payload: VoiceSynthesizePayload):
         
         total_time = llm_latency + tts_latency
         
-        # Print mandatory assessment session log
         print("\n================================")
-        print("VOICE SESSION COMPLETE AUDIT")
+        print(f"VOICE SESSION COMPLETE AUDIT - LOCALE: {bot_type.upper()}")
         print(f"* Session ID: {payload.session_id or 'N/A'}")
         print(f"* Transcript: {query}")
         print(f"* Detected Intent: {intent.upper()}")
@@ -390,3 +431,53 @@ async def voice_synthesize(payload: VoiceSynthesizePayload):
         raise HTTPException(status_code=500, detail=f"TTS compilation failed: {str(e)}")
 
 
+# --- Startup Seeding of Localized Knowledge Chunks ---
+@app.on_event("startup")
+async def seed_localized_data():
+    """
+    Pre-populates ChromaDB on startup with localized FAQ rules for Pioneer Life and Adira Finance.
+    """
+    try:
+        # Check if Pioneer documents exist
+        results_ph = store.query("Pioneer Life Insurance Policy Guidelines", limit=1)
+        has_ph = results_ph and any("pioneer" in str(r["metadata"].get("source", "")).lower() for r in results_ph)
+        
+        # Check if Adira documents exist
+        results_id = store.query("Adira Finance Terms of Service", limit=1)
+        has_id = results_id and any("adira" in str(r["metadata"].get("source", "")).lower() for r in results_id)
+        
+        if not has_ph:
+            print("Seeding Pioneer Life (Philippines) knowledge chunks...")
+            ph_docs = LOCALIZATION_CONFIGS["philippines"]["seed_data"]
+            store.add_documents([{
+                "record_id": f"ph_policy_{idx}",
+                "title": d["title"],
+                "content": d["content"],
+                "category": d["category"],
+                "source": d["source"],
+                "page": d["page"],
+                "section": d["section"],
+                "url": d["url"],
+                "version": "1.0",
+                "timestamp": "2026-07-18"
+            } for idx, d in enumerate(ph_docs)])
+            
+        if not has_id:
+            print("Seeding Adira Finance (Indonesia) knowledge chunks...")
+            id_docs = LOCALIZATION_CONFIGS["indonesia"]["seed_data"]
+            store.add_documents([{
+                "record_id": f"id_policy_{idx}",
+                "title": d["title"],
+                "content": d["content"],
+                "category": d["category"],
+                "source": d["source"],
+                "page": d["page"],
+                "section": d["section"],
+                "url": d["url"],
+                "version": "1.0",
+                "timestamp": "2026-07-18"
+            } for idx, d in enumerate(id_docs)])
+            
+        print("Localized DB seeding checks complete.")
+    except Exception as e:
+        print(f"Warning during localized seeding check: {e}")

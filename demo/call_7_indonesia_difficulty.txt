@@ -1,0 +1,18 @@
+ADIRA FINANCE - MULTILINGUAL CALL TRANSCRIPT 7 (INDONESIA DIFFICULTY)
+===================================================================
+Sector: Consumer Finance (Indonesia)
+Locale: Bahasa Indonesia (Formal and Colloquial blend)
+Scenario: Installment Reminder, Payment Difficulty, and Escalation to Supervisor
+
+[00:02] Agent (Adira Finance Bot): Halo, selamat siang! Saya dari Adira Finance. Apakah benar saya berbicara dengan Bapak Budi?
+[00:09] Customer: Ya, betul. Ada perlu apa ya?
+[00:12] Agent: Saya ingin mengingatkan tentang cicilan motor Bapak sebesar satu juta rupiah yang jatuh tempo tanggal 15 kemarin.
+[00:19] Customer: Waduh, maaf sekali. Saya sedang ada kesulitan pembayaran bulan ini karena belum gajian. Apakah denda keterlambatan bisa dihapus?
+[00:27] Agent (Objection Response): Saya memahami kesulitan Bapak. Pembiayaan kami dirancang untuk membantu cicilan kendaraan tetap terjangkau. Mari kita diskusikan tenor dan angsuran yang lebih cocok.
+[00:37] Customer: Kalau saya mau pembiayaan baru untuk mobil kedua dengan DP rendah, apakah bisa dibantu disetujui juga?
+[00:44] Agent: Untuk pembiayaan baru, kita perlu menyelesaikan cicilan jatuh tempo yang sekarang terlebih dahulu, Bapak Budi.
+[00:51] Customer: Hmm begitu ya. Tolong hubungkan saya dengan staf supervisor sekarang agar bisa bicara langsung tentang potongan denda ini.
+[00:58] Agent (Escalation Response): Baik, saya akan segera menghubungkan Anda dengan staf customer service supervisor kami. Mohon ditunggu sebentar.
+[01:05] Customer: Oke, saya tunggu.
+[01:08] Agent: Terima kasih telah menghubungi Adira Finance. Semoga sehat selalu dan selamat beraktivitas!
+[Call transferred to human supervisor...]

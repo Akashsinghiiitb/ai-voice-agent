@@ -1,32 +1,18 @@
 import time
+from voice_agent.localization import LOCALIZATION_CONFIGS
 
 class ConversationManager:
     """
     Orchestrates dialogue management, manages conversation history sessions,
-    filters intent objections/escalations/farewells, and routes regular questions
-    to the unified backend RAG service helper.
+    filters intent objections/escalations/farewells using localization layers,
+    and routes regular questions to the unified backend RAG service helper.
     """
     def __init__(self, vector_store, query_resolver):
         self.store = vector_store
         self.query_resolver = query_resolver
         self.sessions = {}  # In-memory dictionary: session_id -> session_state
-        
-        # Define conversation keyword parameters
-        self.escalation_keywords = [
-            "human", "representative", "support", "complaint", 
-            "connect", "operator", "speak to someone", "customer service"
-        ]
-        
-        self.objection_keywords = [
-            "expensive", "don't need", "dont need", "no need", "waste of money",
-            "why should i buy", "too high", "costly"
-        ]
-        
-        self.farewell_keywords = [
-            "goodbye", "bye", "exit", "stop", "end conversation"
-        ]
 
-    def get_or_create_session(self, session_id: str) -> dict:
+    def get_or_create_session(self, session_id: str, bot_type: str = "default") -> dict:
         """
         Retrieves or initializes session storage for conversation tracking.
         """
@@ -39,33 +25,43 @@ class ConversationManager:
                 "history": [],
                 "active": True,
                 "last_intent": "greeting",
-                "timestamp": time.time()
+                "timestamp": time.time(),
+                "bot_type": bot_type
             }
+        else:
+            # Update bot type if provided explicitly
+            if bot_type and bot_type != "default":
+                self.sessions[session_id]["bot_type"] = bot_type
+                
         return self.sessions[session_id]
 
-    def detect_intent(self, text: str) -> str:
+    def detect_intent(self, text: str, bot_type: str = "default") -> str:
         """
-        Classifies incoming transcripts into normal_query, objection, escalate, or farewell.
+        Classifies incoming transcripts into normal_query, objection, escalate, or farewell
+        based on localized trigger keywords.
         """
         text_lower = text.lower().strip()
+        config = LOCALIZATION_CONFIGS.get(bot_type, LOCALIZATION_CONFIGS["default"])
         
-        if any(kw in text_lower for kw in self.farewell_keywords):
+        if any(kw in text_lower for kw in config.get("farewell_keywords", [])):
             return "farewell"
             
-        if any(kw in text_lower for kw in self.escalation_keywords):
+        if any(kw in text_lower for kw in config.get("escalation_keywords", [])):
             return "escalate"
             
-        if any(kw in text_lower for kw in self.objection_keywords):
+        if any(kw in text_lower for kw in config.get("objection_keywords", [])):
             return "objection"
             
         return "normal_query"
 
-    def process_message(self, text: str, session_id: str = None) -> dict:
+    def process_message(self, text: str, session_id: str = None, bot_type: str = "default") -> dict:
         """
         Processes statement within a tracking session context. Objections/escalations/farewells 
         return standard responses; normal queries consult the history-aware RAG resolver.
         """
-        session = self.get_or_create_session(session_id)
+        session = self.get_or_create_session(session_id, bot_type)
+        current_bot = session.get("bot_type", bot_type)
+        config = LOCALIZATION_CONFIGS.get(current_bot, LOCALIZATION_CONFIGS["default"])
         
         # Check active session constraints
         if not session["active"]:
@@ -80,13 +76,13 @@ class ConversationManager:
                 "active": False
             }
 
-        intent = self.detect_intent(text)
+        intent = self.detect_intent(text, current_bot)
         
         # 1. Farewell/Exit Trigger
         if intent == "farewell":
             session["active"] = False
             session["last_intent"] = "farewell"
-            answer = "Goodbye! Thank you for contacting UIIC Health Insurance support. Have a wonderful day!"
+            answer = config.get("farewell_response", "Goodbye!")
             session["history"].append({"role": "user", "text": text})
             session["history"].append({"role": "assistant", "text": answer})
             return {
@@ -104,7 +100,7 @@ class ConversationManager:
         if intent == "escalate":
             session["active"] = False  # End agent session to bridge human line
             session["last_intent"] = "escalate"
-            answer = "I will connect you with a customer support representative."
+            answer = config.get("escalation_response", "I will connect you with support.")
             session["history"].append({"role": "user", "text": text})
             session["history"].append({"role": "assistant", "text": answer})
             return {
@@ -121,7 +117,7 @@ class ConversationManager:
         # 3. Value/Price Objection Trigger
         if intent == "objection":
             session["last_intent"] = "objection"
-            answer = "I understand your concern. Health insurance helps protect against unexpected medical expenses. I can explain the coverage benefits."
+            answer = config.get("objection_response", "I understand your concern. Let's discuss options.")
             session["history"].append({"role": "user", "text": text})
             session["history"].append({"role": "assistant", "text": answer})
             return {
@@ -138,8 +134,8 @@ class ConversationManager:
         # 4. Normal RAG Inquiries (Context & History Aware)
         session["last_intent"] = "normal_query"
         
-        # Pass conversation history list to allow query rephrasing before indexing
-        res = self.query_resolver(text, self.store, session["history"])
+        # Pass conversation history list and bot type to allow query rephrasing before indexing
+        res = self.query_resolver(text, self.store, session["history"], bot_type=current_bot)
         
         answer = res["answer"]
         session["history"].append({"role": "user", "text": text})

@@ -1,0 +1,15 @@
+ADIRA FINANCE - MULTILINGUAL CALL TRANSCRIPT 6 (INDONESIA INSTALLMENT)
+===================================================================
+Sector: Consumer Finance (Indonesia)
+Locale: Bahasa Indonesia (Formal and Colloquial blend)
+Scenario: Outbound Installment Reminder & Loan Tenor Confirmation
+
+[00:02] Agent (Adira Finance Bot): Halo, selamat siang! Saya dari Adira Finance. Apakah benar saya berbicara dengan Bapak Budi?
+[00:09] Customer: Ya, betul. Ada apa ya Pak?
+[00:12] Agent: Saya ingin mengingatkan tentang cicilan motor Bapak yang jatuh tempo tanggal 15 kemarin. Angsurannya sebesar satu juta rupiah.
+[00:20] Customer: Oh iya, saya hampir lupa. Berapa lama lagi ya tenor yang tersisa untuk pembiayaan motor saya ini?
+[00:27] Agent: Sesuai data, tenor Bapak tersisa 12 bulan dari total 36 bulan pembiayaan. Jatuh tempo angsuran berikutnya tetap tanggal 15 setiap bulan.
+[00:35] Customer: Oke, saya akan bayar cicilannya lewat M-Banking nanti siang agar tidak kena denda keterlambatan.
+[00:41] Agent: Baik Bapak Budi, terima kasih banyak atas konfirmasinya. Pembayaran akan langsung masuk sistem kami.
+[00:47] Customer: Sama-sama. Dah!
+[00:50] Agent: Terima kasih telah menghubungi Adira Finance. Semoga sehat selalu dan selamat beraktivitas!

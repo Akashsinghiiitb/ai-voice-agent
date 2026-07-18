@@ -1,0 +1,17 @@
+PIONEER LIFE ASSISTANCE - MULTILINGUAL CALL TRANSCRIPT 5 (PHILIPPINES OBJECTION)
+=============================================================================
+Sector: Life Insurance (Philippines)
+Locale: Taglish (Conversational Filipino & English)
+Scenario: Premium Reminder, Price Objection, and Bancassurance Referral
+
+[00:02] Agent (Pioneer Life Bot): Hello, good afternoon! I am calling from Pioneer Life Insurance. Am I speaking with Mr. Reyes?
+[00:08] Customer: Opo, ako nga po. Sino ito at bakit kayo tumatawag?
+[00:12] Agent: Hi Mr. Reyes. Calling to remind you about the monthly premium of 2,500 pesos due on policy #9872.
+[00:18] Customer: Naku, medyo mahal naman ang premium ngayon. Baka hindi ko na kailangan yan, i-lapse ko na lang ang coverage ko dahil sayang pera.
+[00:27] Agent (Objection Response): Naiintindihan ko po ang inyong concern. Mahalaga ang life insurance para sa future ng inyong beneficiaries. Pwede po nating pag-usapan ang lower coverage o riders na akma sa inyong budget.
+[00:38] Customer: Pwede ba yun? Paano naman yung bank referral na sinasabi ng partner bank ko noon? May discount ba doon?
+[00:46] Agent: Opo! Mayroon po tayong bank referral programs (bancassurance) kung saan may special premium rates ang customers ng partner banks natin.
+[00:53] Customer: Ah sige, tawagan niyo na lang ako bukas ng hapon para mapag-usapan natin ang partner bank details at discount options.
+[00:59] Agent (Callback Response): Acknowledge immediately. Gusto niyo po ba na tawagan ko kayo bukas ng 2 PM?
+[01:04] Customer: Sige, 2 PM bukas. Salamat!
+[01:07] Agent: Walang anuman po, i-schedule ko ang callback. Maraming salamat sa pagtawag sa Pioneer Life! Magandang araw!

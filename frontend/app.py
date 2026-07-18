@@ -460,530 +460,330 @@ with col_right:
 
     # --- Real-Time Assistant & Nudges Tab ---
     with tab_nudge:
-        st.header("📊 Real-Time Assistant & Live Nudges")
+        st.header("📊 Live Conversation & AI Assistant")
         st.markdown(
-            "This workspace simulates a production-grade real-time stream processing pipeline. "
-            "Customer turn audio is split into progressive 3 to 5-second sub-phrase chunks. "
-            "Each chunk triggers incremental Speech Recognition, signal checks, and priority nudge updates."
+            "Speak naturally with the grounded RAG agent over the microphone. "
+            "The AI assistant continuously listens, transcribes your voice, retrieves grounding facts, "
+            "and generates real-time suggestions (nudges) on the sidebar panel."
         )
 
-        sim_locale = st.selectbox(
-            "Select Scenario Simulation",
-            options=[
-                "philippines", "indonesia", "default", "compliance_gap", 
-                "risk_statement", "missed_cross_sell", "callback_request", 
-                "noisy_conversation", "ambiguous_conversation", "language_switching"
-            ],
-            format_func=lambda x: {
-                "default": "Scenario 1: General Health - Frustration & Cross-sell",
-                "philippines": "Scenario 2: Pioneer PH - Outbound Premium Objection",
-                "indonesia": "Scenario 3: Adira Finance ID - Installment Difficulty",
-                "compliance_gap": "Scenario 4: Compliance Gap (Missing call recording disclosure)",
-                "risk_statement": "Scenario 5: Risk Alert (Agent promised day-one PED cover)",
-                "missed_cross_sell": "Scenario 6: Missed Opportunity (Multi-vehicle & Family float)",
-                "callback_request": "Scenario 7: Callback Request (Busy schedule)",
-                "noisy_conversation": "Scenario 8: Noisy Call environment",
-                "ambiguous_conversation": "Scenario 9: Ambiguous statements",
-                "language_switching": "Scenario 10: Multilingual Language Switching"
-            }[x],
-            key="sim_selected_locale"
-        )
-
-        # Simulation Scripts definition for Q4 Test Scenarios
-        SIM_SCRIPTS = {
-            "default": [
-                {"role": "agent", "text": "Hello, welcome to UIIC Health Insurance. This line is monitored and recorded for quality."},
-                {"role": "user", "text": "Hi, I am calling because I have been waiting for my claim approval for weeks. This is so frustrating, your service is terrible!"},
-                {"role": "agent", "text": "I am very sorry to hear that. Let me look up your claim files immediately."},
-                {"role": "user", "text": "Also, I want to add my second new car. Do you offer auto insurance covers?"},
-                {"role": "agent", "text": "Yes we do. We have comprehensive motor insurance options."}
-            ],
-            "philippines": [
-                {"role": "agent", "text": "Hello, good afternoon! Pioneer Life. Am I speaking with Mr. Reyes?"},
-                {"role": "user", "text": "Yes, speaking. Sino po sila at bakit kayo tumatawag?"},
-                {"role": "agent", "text": "Hi Mr. Reyes, calling to remind you about premium payment for policy #9872. It is due soon."},
-                {"role": "user", "text": "Naku, medyo mahal na kasi ang premium ngayon. Baka hindi ko na kailangan yan o i-lapse ko na lang kasi sayang pera."},
-                {"role": "agent", "text": "We can check other plans or bank referral options for a cheaper rate, Mr. Reyes."},
-                {"role": "user", "text": "Sige, tawagan niyo na lang ako bukas ng hapon para mapag-usapan natin. Medyo busy ako ngayon. Salamat!"}
-            ],
-            "indonesia": [
-                {"role": "agent", "text": "Halo, selamat siang dengan Bapak Budi?"},
-                {"role": "user", "text": "Ya, betul. Ini siapa ya?"},
-                {"role": "agent", "text": "Saya dari Adira Finance. Ingin mengingatkan cicilan motor Bapak yang sudah jatuh tempo tanggal 15 kemarin."},
-                {"role": "user", "text": "Waduh, maaf sekali. Saya sedang ada kesulitan pembayaran angsuran bulan ini karena belum gajian. Apakah denda keterlambatan bisa dihapus?"},
-                {"role": "agent", "text": "Untuk denda kami bisa bantu ajukan keringanan jika Bapak bayar sebagian hari ini."},
-                {"role": "user", "text": "Kalau saya mau mengajukan pembiayaan baru untuk mobil kedua dengan tenor 36 bulan, apakah bisa disetujui?"}
-            ],
-            "compliance_gap": [
-                {"role": "agent", "text": "Hello, welcome to UIIC Health Insurance. How can I help you today?"}, # Forgot recording disclosure
-                {"role": "user", "text": "Hello, is this line secure? I want to make a claim."},
-                {"role": "agent", "text": "Yes, it is secure. Go ahead."},
-                {"role": "user", "text": "Are you recording this call? You must disclose recording rules."}
-            ],
-            "risk_statement": [
-                {"role": "agent", "text": "Hello, UIIC Health Insurance. How can I help you today?"},
-                {"role": "user", "text": "I want to purchase a health policy, but I have a pre-existing cataract condition. Is it covered from day one?"},
-                {"role": "agent", "text": "Yes, we cover pre-existing conditions immediately from day one."} # Promised day-one cover (Risk!)
-            ],
-            "missed_cross_sell": [
-                {"role": "agent", "text": "Hello, Pioneer Life."},
-                {"role": "user", "text": "Hi, I have an existing life policy. I have children now, and my wife and I just bought a second car."},
-                {"role": "agent", "text": "Okay, I can update your address details."} # Forgot cross-sell
-            ],
-            "callback_request": [
-                {"role": "agent", "text": "Hello, UIIC Health."},
-                {"role": "user", "text": "I am currently driving and busy. Please call me back tomorrow morning."}
-            ],
-            "noisy_conversation": [
-                {"role": "agent", "text": "Hello, can you hear me?"},
-                {"role": "user", "text": "[Static noise] Yes, hello? Can you hear me? I want to pay my premium but the signal is very bad."}
-            ],
-            "ambiguous_conversation": [
-                {"role": "agent", "text": "Hello, welcome."},
-                {"role": "user", "text": "Uh... I am not sure... maybe I need... what was that policy... wait, nevermind..."}
-            ],
-            "language_switching": [
-                {"role": "agent", "text": "Hello, UIIC Insurance."},
-                {"role": "user", "text": "Yes, hello. I want to ask about my policy. Sandali lang po, mas madali po kasi kung mag-Taglish tayo. Magkano po ba ang premium ko ngayon?"},
-                {"role": "agent", "text": "I can help with that."},
-                {"role": "user", "text": "Salamat. Dan apakah jatuh tempo cicilan bisa diundur? Saya agak bingung."}
-            ]
-        }
-
-        # Initialize latency and database session states
-        if "sim_latencies" not in st.session_state:
-            st.session_state.sim_latencies = {"asr": [], "llm": [], "signal": [], "dashboard": [], "e2e": []}
-        if "sim_transcript" not in st.session_state:
-            st.session_state.sim_transcript = []
-        if "sim_running" not in st.session_state:
-            st.session_state.sim_running = False
-        if "active_nudges" not in st.session_state:
-            st.session_state.active_nudges = []
-        if "latest_nudge" not in st.session_state:
-            st.session_state.latest_nudge = {
-                "type": "None", "confidence": 0.0, "nudge": "No active nudges at this time.", 
-                "timestamp": "--:--:--", "priority": "Low", "reason": "None", "recommendation": "No active nudges."
+        # Initialize session state variables for live conversation
+        if "live_active" not in st.session_state:
+            st.session_state.live_active = False
+        if "live_session_id" not in st.session_state:
+            st.session_state.live_session_id = ""
+        if "live_history" not in st.session_state:
+            st.session_state.live_history = []
+        if "live_turn" not in st.session_state:
+            st.session_state.live_turn = 0
+        if "live_audio_bytes" not in st.session_state:
+            st.session_state.live_audio_bytes = None
+        if "live_latencies" not in st.session_state:
+            st.session_state.live_latencies = {"asr": [], "llm": [], "signal": [], "dashboard": [], "e2e": []}
+        if "live_nudges" not in st.session_state:
+            st.session_state.live_nudges = []
+        if "live_latest_nudge" not in st.session_state:
+            st.session_state.live_latest_nudge = {
+                "type": "None", "confidence": 0.0, "recommendation": "No active suggestions.", 
+                "priority": "Low", "reason": "None", "timestamp": "--:--:--"
             }
-        if "sim_sentiment" not in st.session_state:
-            st.session_state.sim_sentiment = "Neutral"
-        if "sim_language" not in st.session_state:
-            st.session_state.sim_language = "English"
-        if "sim_intent" not in st.session_state:
-            st.session_state.sim_intent = "Inquiry"
-        if "simulation_db_logs" not in st.session_state:
-            st.session_state.simulation_db_logs = []
+        if "live_sentiment" not in st.session_state:
+            st.session_state.live_sentiment = "Neutral"
+        if "live_intent" not in st.session_state:
+            st.session_state.live_intent = "Inquiry"
+        if "live_logs" not in st.session_state:
+            st.session_state.live_logs = []
 
-        col_sim1, col_sim2 = st.columns(2)
-        with col_sim1:
-            start_sim = st.button("🚀 Start Live Simulation", type="primary", use_container_width=True, disabled=st.session_state.sim_running)
-        with col_sim2:
-            clear_sim = st.button("🧹 Clear Logs", use_container_width=True, disabled=st.session_state.sim_running)
+        col_l1, col_l2 = st.columns(2)
+        with col_l1:
+            if st.button("🎤 Start Live Conversation", key="start_live_voice", use_container_width=True, type="primary"):
+                st.session_state.live_active = True
+                st.session_state.live_session_id = f"live_{int(time.time())}"
+                st.session_state.live_history = []
+                st.session_state.live_turn = 0
+                st.session_state.live_audio_bytes = None
+                st.session_state.live_nudges = []
+                st.session_state.live_latest_nudge = {
+                    "type": "None", "confidence": 0.0, "recommendation": "No active suggestions.", 
+                    "priority": "Low", "reason": "None", "timestamp": "--:--:--"
+                }
+                st.session_state.live_sentiment = "Neutral"
+                st.session_state.live_intent = "Inquiry"
+                st.session_state.live_logs = []
+                st.session_state.live_latencies = {"asr": [], "llm": [], "signal": [], "dashboard": [], "e2e": []}
+                st.session_state.nudge_engine = NudgeEngine() # Reset engine state
+                st.rerun()
+                
+        with col_l2:
+            if st.button("■ End Live Conversation", key="end_live_voice", use_container_width=True, type="primary"):
+                st.session_state.live_active = False
+                st.session_state.live_audio_bytes = None
+                st.rerun()
 
-        if clear_sim:
-            st.session_state.sim_latencies = {"asr": [], "llm": [], "signal": [], "dashboard": [], "e2e": []}
-            st.session_state.sim_transcript = []
-            st.session_state.active_nudges = []
-            st.session_state.latest_nudge = {
-                "type": "None", "confidence": 0.0, "nudge": "No active nudges at this time.", 
-                "timestamp": "--:--:--", "priority": "Low", "reason": "None", "recommendation": "No active nudges."
-            }
-            st.session_state.sim_sentiment = "Neutral"
-            st.session_state.sim_language = "English"
-            st.session_state.sim_intent = "Inquiry"
-            st.session_state.simulation_db_logs = []
-            st.session_state.nudge_engine = NudgeEngine() # Reset engine state
-            st.rerun()
+        # Session status display
+        if st.session_state.live_active:
+            st.success(f"Live Mic Session Active (ID: {st.session_state.live_session_id}) - Language: English")
+        else:
+            st.info("Live Session Ended. Click 'Start Live Conversation' to begin.")
 
-        # Render Live Status and Dashboard Layout
-        status_container = st.empty()
-        
-        # Grid splits: Left = Live Transcript bubble screen, Right = Live Agent Assistant panel & latency stats
+        # Grid splits: Left = Live Transcript & Mic, Right = Live Suggestions & Latency
         g_left, g_right = st.columns([1, 1])
 
         with g_left:
             st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-            st.subheader("🗣&nbsp; Live Streaming Transcript")
-            transcript_placeholder = st.empty()
+            st.subheader("🗣️ Live Conversation Transcript")
             
-            # Helper to draw transcript bubbles
-            def draw_bubbles():
-                html = ""
-                for item in st.session_state.sim_transcript:
-                    bubble_class = "bubble-user" if item["role"] == "user" else "bubble-agent"
-                    role_label = "Customer" if item["role"] == "user" else "Agent"
-                    html += f"""
-                    <div class="transcript-bubble {bubble_class}">
-                        <strong>{role_label}:</strong> {item["text"]}
-                    </div>
-                    """
-                transcript_placeholder.markdown(html, unsafe_allow_html=True)
-            
-            draw_bubbles()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Metadata Display card
-            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-            st.subheader("📋 Conversation Metadata")
-            meta_placeholder = st.empty()
-            
-            def draw_meta():
-                meta_placeholder.markdown(f"""
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;">
-                    <div class="metric-card">
-                        <div style="font-size:1.15rem; font-weight:700; color:#3b82f6;">{st.session_state.sim_language}</div>
-                        <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase;">Detected Language</div>
-                    </div>
-                    <div class="metric-card">
-                        <div style="font-size:1.15rem; font-weight:700; color:#10b981;">{st.session_state.sim_intent}</div>
-                        <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase;">Customer Intent</div>
-                    </div>
-                    <div class="metric-card">
-                        <div style="font-size:1.15rem; font-weight:700; color:#ef4444;">{st.session_state.sim_sentiment}</div>
-                        <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase;">Sentiment Analysis</div>
-                    </div>
+            # Render chat bubble transcripts
+            transcript_html = ""
+            for item in st.session_state.live_history:
+                bubble_class = "bubble-user" if item["role"] == "user" else "bubble-agent"
+                role_label = "Customer" if item["role"] == "user" else "Agent"
+                transcript_html += f"""
+                <div class="transcript-bubble {bubble_class}">
+                    <strong>{role_label}:</strong> {item["text"]}
                 </div>
-                """, unsafe_allow_html=True)
-            
-            draw_meta()
+                """
+            st.markdown(transcript_html, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-        with g_right:
-            # Active Agent assistant nudge card
-            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-            st.subheader("💡 Active Agent Nudges Queue")
-            active_nudges_placeholder = st.empty()
-            
-            def draw_nudges():
-                active = st.session_state.active_nudges
-                latest = st.session_state.latest_nudge
-                
-                html = ""
-                # Draw latest primary nudge if present
-                if latest and latest["type"] != "None":
-                    badge_color = "badge-critical" if latest["priority"] == "Critical" else ("badge-high" if latest["priority"] == "High" else ("badge-medium" if latest["priority"] == "Medium" else "badge-low"))
-                    html += f"""
-                    <div class="nudge-panel">
-                        <div class="signal-badge {badge_color}">{latest["type"].upper()} ({latest["priority"]} - {latest["confidence"]*100:.0f}%)</div>
-                        <div class="nudge-title">Recommended Agent Action:</div>
-                        <p style="font-size:1.1rem; line-height:1.4; font-weight:600; margin:5px 0;">"{latest["recommendation"]}"</p>
-                        <div style="font-size:0.8rem; color:#f43f5e; margin-top:8px;">Reason: {latest["reason"]}</div>
-                        <div style="font-size:0.75rem; color:#9ca3af; margin-top:4px;">Triggered at: {latest["timestamp"]}</div>
-                    </div>
-                    <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.08); margin: 15px 0;"/>
-                    """
-                
-                # Draw queue
-                if not active:
-                    html += "<p style='color:#9ca3af;'>No active nudges in queue.</p>"
+            # Audio Input controls inside left panel
+            if st.session_state.live_active:
+                st.markdown("### 🎙️ Speak Now")
+                audio_file = None
+                if hasattr(st, "audio_input"):
+                    audio_file = st.audio_input(
+                        "Click to speak...", 
+                        key=f"live_mic_{st.session_state.live_turn}"
+                    )
                 else:
-                    html += "<div style='max-height: 250px; overflow-y: auto;'>"
-                    for n in active:
-                        badge_color = "badge-critical" if n["priority"] == "Critical" else ("badge-high" if n["priority"] == "High" else ("badge-medium" if n["priority"] == "Medium" else "badge-low"))
-                        html += f"""
-                        <div style="padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
-                            <span class="signal-badge {badge_color}" style="margin-bottom: 4px;">{n["type"].upper()}</span>
-                            <span style="font-size:0.75rem; color:#9ca3af; float:right;">Confidence: {n["confidence"]*100:.0f}%</span>
-                            <div style="font-size: 0.9rem; font-weight: 500;">{n["recommendation"]}</div>
-                            <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 2px;">Reason: {n["reason"]}</div>
-                        </div>
-                        """
-                    html += "</div>"
+                    audio_file = st.file_uploader(
+                        "Upload audio recording",
+                        type=["wav", "mp3", "m4a"],
+                        key=f"live_upload_{st.session_state.live_turn}"
+                    )
                 
-                active_nudges_placeholder.markdown(html, unsafe_allow_html=True)
-                
-            draw_nudges()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            # Latency metric displays
-            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
-            st.subheader("⚡ Latency Profile Distribution")
-            
-            lat_placeholder = st.empty()
-            
-            def render_latencies():
-                lats = st.session_state.sim_latencies
-                
-                # Calculate metrics
-                def stats(key):
-                    vals = lats[key]
-                    if not vals:
-                        return "0.0 ms", "0.0 ms", "0 ms", "0 ms", "0 ms"
-                    # Convert to ms
-                    current = vals[-1] * 1000
-                    p50 = np.percentile(vals, 50) * 1000
-                    p95 = np.percentile(vals, 95) * 1000
-                    v_min = min(vals) * 1000
-                    v_max = max(vals) * 1000
-                    v_avg = np.mean(vals) * 1000
-                    return f"{current:.0f} ms", f"{p50:.0f} ms", f"{p95:.0f} ms", f"{v_avg:.0f} ms", f"{v_min:.0f} / {v_max:.0f} ms"
-                
-                c_asr, asr_50, asr_95, asr_avg, asr_range = stats("asr")
-                c_llm, llm_50, llm_95, llm_avg, llm_range = stats("llm")
-                c_sig, sig_50, sig_95, sig_avg, sig_range = stats("signal")
-                c_dash, dash_50, dash_95, dash_avg, dash_range = stats("dashboard")
-                c_e2e, e2e_50, e2e_95, e2e_avg, e2e_range = stats("e2e")
-                
-                lat_placeholder.markdown(f"""
-                <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
-                    <thead>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #9ca3af;">
-                            <th style="padding: 6px;">Stage</th>
-                            <th style="padding: 6px;">Current</th>
-                            <th style="padding: 6px;">P50</th>
-                            <th style="padding: 6px;">P95</th>
-                            <th style="padding: 6px;">Avg</th>
-                            <th style="padding: 6px;">Min/Max</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 6px; font-weight:600;">Speech to Text (ASR)</td>
-                            <td style="padding: 6px;">{c_asr}</td>
-                            <td style="padding: 6px;">{asr_50}</td>
-                            <td style="padding: 6px;">{asr_95}</td>
-                            <td style="padding: 6px;">{asr_avg}</td>
-                            <td style="padding: 6px;">{asr_range}</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 6px; font-weight:600;">LLM dialogue RAG</td>
-                            <td style="padding: 6px;">{c_llm}</td>
-                            <td style="padding: 6px;">{llm_50}</td>
-                            <td style="padding: 6px;">{llm_95}</td>
-                            <td style="padding: 6px;">{llm_avg}</td>
-                            <td style="padding: 6px;">{llm_range}</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 6px; font-weight:600;">Signal Detection</td>
-                            <td style="padding: 6px;">{c_sig}</td>
-                            <td style="padding: 6px;">{sig_50}</td>
-                            <td style="padding: 6px;">{sig_95}</td>
-                            <td style="padding: 6px;">{sig_avg}</td>
-                            <td style="padding: 6px;">{sig_range}</td>
-                        </tr>
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 6px; font-weight:600;">Dashboard render</td>
-                            <td style="padding: 6px;">{c_dash}</td>
-                            <td style="padding: 6px;">{dash_50}</td>
-                            <td style="padding: 6px;">{dash_95}</td>
-                            <td style="padding: 6px;">{dash_avg}</td>
-                            <td style="padding: 6px;">{dash_range}</td>
-                        </tr>
-                        <tr style="border-top: 1px solid rgba(255,255,255,0.1); background: rgba(99,102,241,0.05); color:#a855f7; font-weight:bold;">
-                            <td style="padding: 8px; font-weight:800;">End-to-End Total</td>
-                            <td style="padding: 8px;">{c_e2e}</td>
-                            <td style="padding: 8px;">{e2e_50}</td>
-                            <td style="padding: 8px;">{e2e_95}</td>
-                            <td style="padding: 8px;">{e2e_avg}</td>
-                            <td style="padding: 8px;">{e2e_range}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                """, unsafe_allow_html=True)
-            
-            render_latencies()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # Helper to partition customer text into natural conversational chunks
-        def partition_turn_text(text: str) -> list:
-            # First, split by natural speech boundaries
-            parts = re.split(r'[,.?!;:]', text)
-            parts = [p.strip() for p in parts if p.strip()]
-            if len(parts) > 1:
-                chunks = []
-                current = []
-                for p in parts:
-                    current.append(p)
-                    chunks.append(". ".join(current) + ".")
-                return chunks
-            
-            # Fallback to word count chunking (groups of 4 words)
-            words = text.split()
-            if len(words) <= 5:
-                return [text]
-            chunks = []
-            for i in range(4, len(words) + 4, 4):
-                chunk_words = words[:min(i, len(words))]
-                chunks.append(" ".join(chunk_words))
-            if chunks[-1] != text:
-                chunks.append(text)
-            return chunks
-
-        # Simulation processing loop
-        if start_sim:
-            st.session_state.sim_running = True
-            st.session_state.sim_transcript = []
-            st.session_state.sim_latencies = {"asr": [], "llm": [], "signal": [], "dashboard": [], "e2e": []}
-            st.session_state.active_nudges = []
-            st.session_state.latest_nudge = {
-                "type": "None", "confidence": 0.0, "nudge": "No active nudges at this time.", 
-                "timestamp": "--:--:--", "priority": "Low", "reason": "None", "recommendation": "No active nudges."
-            }
-            st.session_state.simulation_db_logs = []
-            st.session_state.nudge_engine = NudgeEngine() # Reset engine state
-            
-            session_id = f"sim_prod_{int(time.time())}"
-            script = SIM_SCRIPTS[sim_locale]
-            
-            # Detect script target bot locale mapping
-            target_locale_mapping = {
-                "philippines": "philippines",
-                "language_switching": "philippines",
-                "missed_cross_sell": "philippines",
-                "indonesia": "indonesia",
-                "default": "default"
-            }
-            bot_locale_choice = target_locale_mapping.get(sim_locale, "default")
-            
-            cumulative_user_text = ""
-            user_turn_count = 0
-            
-            for idx, turn in enumerate(script):
-                status_container.info(f"Simulating turn {idx+1}/{len(script)} ({turn['role'].upper()})...")
-                
-                if turn["role"] == "agent":
-                    e2e_start = time.time()
-                    # Simulating agent talking
-                    st.session_state.sim_transcript.append({"role": "assistant", "text": turn["text"]})
-                    draw_bubbles()
-                    
-                    # Accumulate for compliance check
-                    cumulative_user_text += " Agent: " + turn["text"]
-                    
-                    # Store dummy metrics for agent turns to avoid corrupting stats
-                    st.session_state.sim_latencies["asr"].append(0.0)
-                    st.session_state.sim_latencies["llm"].append(0.0)
-                    st.session_state.sim_latencies["signal"].append(0.0)
-                    st.session_state.sim_latencies["dashboard"].append(0.005)
-                    st.session_state.sim_latencies["e2e"].append(time.time() - e2e_start)
-                    render_latencies()
-                    
-                    # Log to simulation database
-                    st.session_state.simulation_db_logs.append({
-                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "event": "agent_turn",
-                        "text": turn["text"]
-                    })
-                    
-                    time.sleep(1.2) # Real timing pause
-                    
-                else:
-                    # Simulating customer talking - REAL-TIME INCREMENTAL AUDIO CHUNK FLOW
-                    # Split customer turn text into progressive chunks (subphrases)
-                    text_chunks = partition_turn_text(turn["text"])
-                    
-                    for c_idx, text_chunk in enumerate(text_chunks):
-                        status_container.info(f"Streaming customer chunk {c_idx+1}/{len(text_chunks)}: '{text_chunk}'")
-                        
+                if audio_file:
+                    try:
                         e2e_start = time.time()
+                        status_box = st.empty()
                         
-                        # 1. TTS Synthesis (synthesize the progressive chunk audio)
-                        synth_start = time.time()
-                        try:
-                            synth_payload = {
-                                "text": text_chunk,
-                                "bot_type": bot_locale_choice
-                            }
-                            synth_res = requests.post("http://localhost:8000/voice/synthesize", json=synth_payload, timeout=20)
-                            has_audio = (synth_res.status_code == 200)
-                        except Exception:
-                            has_audio = False
-                        
-                        # 2. ASR Speech Transcription (send progressive audio to Whisper)
+                        # 1. Speech Recognition (ASR)
+                        status_box.status("Transcribing voice input...")
                         asr_start = time.time()
-                        transcribed_text = text_chunk  # Fallback
-                        if has_audio:
-                            try:
-                                files = {"file": ("sim_input.mp3", synth_res.content, "audio/mpeg")}
-                                transcribe_res = requests.post("http://localhost:8000/voice/transcribe", files=files, timeout=30)
-                                if transcribe_res.status_code == 200:
-                                    transcribed_text = transcribe_res.json().get("transcript", transcribed_text)
-                            except Exception as e:
-                                print(f"ASR chunk transcription fail: {e}")
+                        files = {"file": ("input.wav", audio_file.getvalue(), "audio/wav")}
+                        transcribe_res = requests.post("http://localhost:8000/voice/transcribe", files=files, timeout=30)
                         
+                        if transcribe_res.status_code == 200:
+                            transcript_text = transcribe_res.json().get("transcript", "").strip()
+                        else:
+                            transcript_text = ""
+                            
                         asr_time = time.time() - asr_start
-                        st.session_state.sim_latencies["asr"].append(asr_time)
+                        st.session_state.live_latencies["asr"].append(asr_time)
                         
-                        # 3. LLM dialogue context query (run the RAG pipeline call)
-                        llm_start = time.time()
-                        try:
+                        if transcript_text:
+                            # 2. Dialogue RAG Query
+                            status_box.status("Querying RAG agent...")
+                            llm_start = time.time()
                             chat_payload = {
-                                "question": transcribed_text,
-                                "session_id": session_id,
-                                "bot_type": bot_locale_choice
+                                "question": transcript_text,
+                                "session_id": st.session_state.live_session_id,
+                                "bot_type": "default"
                             }
                             chat_res = requests.post("http://localhost:8000/voice/chat", json=chat_payload, timeout=20)
-                        except Exception as e:
-                            print(f"LLM dialogue failure: {e}")
+                            agent_answer = chat_res.json().get("answer", "I didn't catch that.")
+                            llm_time = time.time() - llm_start
+                            st.session_state.live_latencies["llm"].append(llm_time)
                             
-                        llm_time = time.time() - llm_start
-                        st.session_state.sim_latencies["llm"].append(llm_time)
-                        
-                        # Append the temporary growing text chunk to transcript view
-                        if len(st.session_state.sim_transcript) > 0 and st.session_state.sim_transcript[-1]["role"] == "user":
-                            # Replace the last turn with the updated growing transcript chunk
-                            st.session_state.sim_transcript[-1]["text"] = transcribed_text
-                        else:
-                            st.session_state.sim_transcript.append({"role": "user", "text": transcribed_text})
+                            # Append history
+                            st.session_state.live_history.append({"role": "user", "text": transcript_text})
+                            st.session_state.live_history.append({"role": "assistant", "text": agent_answer})
                             
-                        draw_bubbles()
+                            # 3. Text to Speech synthesis (TTS)
+                            status_box.status("Synthesizing voice reply...")
+                            synth_payload = {
+                                "text": agent_answer,
+                                "session_id": st.session_state.live_session_id,
+                                "bot_type": "default"
+                            }
+                            synth_res = requests.post("http://localhost:8000/voice/synthesize", json=synth_payload, timeout=20)
+                            if synth_res.status_code == 200:
+                                st.session_state.live_audio_bytes = synth_res.content
+                            else:
+                                st.session_state.live_audio_bytes = None
+                                
+                            # 4. Continuous Nudge Engine Analysis
+                            status_box.status("Analyzing conversation signals...")
+                            sig_start = time.time()
+                            
+                            # Build growing transcript context
+                            full_transcript_str = ""
+                            for h_item in st.session_state.live_history:
+                                prefix = "Customer: " if h_item["role"] == "user" else "Agent: "
+                                full_transcript_str += prefix + h_item["text"] + " "
+                                
+                            nudge_result = st.session_state.nudge_engine.process_transcript(
+                                full_transcript_str, st.session_state.live_session_id, st.session_state.live_turn
+                            )
+                            sig_time = time.time() - sig_start
+                            st.session_state.live_latencies["signal"].append(sig_time)
+                            
+                            # Update nudge values
+                            st.session_state.live_nudges = nudge_result["active_nudges"]
+                            st.session_state.live_latest_nudge = nudge_result["latest_nudge"]
+                            st.session_state.live_sentiment = nudge_result["sentiment"]
+                            st.session_state.live_intent = nudge_result["intent"]
+                            
+                            # Log events
+                            st.session_state.live_logs.append({
+                                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                "turn": st.session_state.live_turn,
+                                "customer_text": transcript_text,
+                                "agent_text": agent_answer,
+                                "nudges": len(nudge_result["active_nudges"]),
+                                "latest_nudge": nudge_result["latest_nudge"].get("recommendation", "None")
+                            })
+                            
+                            # Measure Display Render
+                            dash_start = time.time()
+                            dash_time = time.time() - dash_start
+                            st.session_state.live_latencies["dashboard"].append(dash_time)
+                            
+                            # Total E2E Latency
+                            st.session_state.live_latencies["e2e"].append(time.time() - e2e_start)
+                            
+                        status_box.empty()
+                        st.session_state.live_turn += 1
+                        st.rerun()
                         
-                        # Accumulate transcription text for signal checking
-                        turn_full_text = cumulative_user_text + " Customer: " + transcribed_text
-                        
-                        # 4. Signal Detection & Nudge Processing
-                        sig_start = time.time()
-                        nudge_result = st.session_state.nudge_engine.process_transcript(
-                            turn_full_text, session_id, user_turn_count
-                        )
-                        sig_time = time.time() - sig_start
-                        st.session_state.sim_latencies["signal"].append(sig_time)
-                        
-                        # Update session metrics on dashboard
-                        st.session_state.sim_sentiment = nudge_result["sentiment"]
-                        st.session_state.sim_language = nudge_result["language"]
-                        st.session_state.sim_intent = nudge_result["intent"]
-                        st.session_state.active_nudges = nudge_result["active_nudges"]
-                        st.session_state.latest_nudge = nudge_result["latest_nudge"]
-                        
-                        # Log transcript updates and signals to database
-                        st.session_state.simulation_db_logs.append({
-                            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                            "event": "customer_chunk",
-                            "chunk_index": c_idx,
-                            "transcribed_text": transcribed_text,
-                            "sentiment": nudge_result["sentiment"],
-                            "language": nudge_result["language"],
-                            "intent": nudge_result["intent"],
-                            "active_nudges_count": len(nudge_result["active_nudges"]),
-                            "latest_nudge_type": nudge_result["latest_nudge"].get("type", "None")
-                        })
-                        
-                        draw_meta()
-                        draw_nudges()
-                        
-                        # 5. Measure Dashboard render metrics
-                        dash_start = time.time()
-                        render_latencies()
-                        dash_time = time.time() - dash_start
-                        st.session_state.sim_latencies["dashboard"].append(dash_time)
-                        
-                        # End to End Total Latency
-                        st.session_state.sim_latencies["e2e"].append(time.time() - e2e_start)
-                        render_latencies()
-                        
-                        # Real pauses simulation between chunks
-                        time.sleep(1.8)
-                    
-                    # Accumulate full customer statement upon completing all turn chunks
-                    cumulative_user_text += " Customer: " + turn["text"]
-                    user_turn_count += 1
-            
-            status_container.success("Simulation Complete!")
-            st.session_state.sim_running = False
-            st.rerun()
+                    except Exception as e:
+                        st.error(f"Error processing audio turn: {e}")
 
-        # Render database log inspector
-        if st.session_state.simulation_db_logs:
+            if st.session_state.live_audio_bytes:
+                st.markdown("🔊 **Playing Agent Response...**")
+                try:
+                    st.audio(st.session_state.live_audio_bytes, format="audio/mp3", autoplay=True)
+                except TypeError:
+                    st.audio(st.session_state.live_audio_bytes, format="audio/mp3")
+
+        with g_right:
+            # Active suggestions card
+            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+            st.subheader("💡 Real-Time AI Suggestions (Nudges)")
+            
+            latest = st.session_state.live_latest_nudge
+            active_list = st.session_state.live_nudges
+            
+            html = ""
+            if latest and latest["type"] != "None":
+                badge_color = "badge-critical" if latest.get("priority") == "Critical" else ("badge-high" if latest.get("priority") == "High" else ("badge-medium" if latest.get("priority") == "Medium" else "badge-low"))
+                html += f"""
+                <div class="nudge-panel">
+                    <div class="signal-badge {badge_color}">{latest.get("priority", "Medium").upper()} ({latest.get("confidence", 0)*100:.0f}%)</div>
+                    <div class="nudge-title">AI Assistant Suggestion:</div>
+                    <p style="font-size:1.15rem; line-height:1.4; font-weight:600; margin:5px 0;">"{latest.get("recommendation")}"</p>
+                    <div style="font-size:0.8rem; color:#f43f5e; margin-top:8px;">Reason: {latest.get("reason")}</div>
+                    <div style="font-size:0.75rem; color:#9ca3af; margin-top:4px;">Triggered at: {latest.get("timestamp")}</div>
+                </div>
+                <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.08); margin: 15px 0;"/>
+                """
+            
+            if not active_list:
+                html += "<p style='color:#9ca3af;'>No active suggestions. Speak through the microphone to generate nudges.</p>"
+            else:
+                html += "<div style='max-height: 250px; overflow-y: auto;'>"
+                for n in active_list:
+                    badge_color = "badge-critical" if n["priority"] == "Critical" else ("badge-high" if n["priority"] == "High" else ("badge-medium" if n["priority"] == "Medium" else "badge-low"))
+                    html += f"""
+                    <div style="padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px;">
+                        <span class="signal-badge {badge_color}" style="margin-bottom: 4px;">{n["priority"].upper()}</span>
+                        <span style="font-size:0.75rem; color:#9ca3af; float:right;">Confidence: {n["confidence"]*100:.0f}%</span>
+                        <div style="font-size: 0.95rem; font-weight: 600;">{n["recommendation"]}</div>
+                        <div style="font-size: 0.75rem; color: #9ca3af; margin-top: 2px;">Reason: {n["reason"]}</div>
+                    </div>
+                    """
+                html += "</div>"
+            
+            st.markdown(html, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Metadata Display
+            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+            st.subheader("📋 Session Indicators")
+            st.markdown(f"""
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; text-align: center;">
+                <div class="metric-card">
+                    <div style="font-size:1.15rem; font-weight:700; color:#10b981;">{st.session_state.live_intent}</div>
+                    <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase;">Customer Intent</div>
+                </div>
+                <div class="metric-card">
+                    <div style="font-size:1.15rem; font-weight:700; color:#ef4444;">{st.session_state.live_sentiment}</div>
+                    <div style="font-size:0.75rem; color:#9ca3af; text-transform:uppercase;">Sentiment</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # Latency statistics
+            st.markdown('<div class="premium-card">', unsafe_allow_html=True)
+            st.subheader("⚡ Latency Profile")
+            
+            # Latency calculations
+            def get_lat_stats(key):
+                vals = st.session_state.live_latencies.get(key, [])
+                if not vals:
+                    return "0 ms", "0 ms", "0 ms"
+                p50 = np.percentile(vals, 50) * 1000
+                p95 = np.percentile(vals, 95) * 1000
+                v_avg = np.mean(vals) * 1000
+                return f"{p50:.0f} ms", f"{p95:.0f} ms", f"{v_avg:.0f} ms"
+            
+            asr_p50, asr_p95, asr_avg = get_lat_stats("asr")
+            llm_p50, llm_p95, llm_avg = get_lat_stats("llm")
+            sig_p50, sig_p95, sig_avg = get_lat_stats("signal")
+            e2e_p50, e2e_p95, e2e_avg = get_lat_stats("e2e")
+            
+            st.markdown(f"""
+            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+                <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: #9ca3af;">
+                        <th style="padding: 6px;">Pipeline Stage</th>
+                        <th style="padding: 6px;">P50</th>
+                        <th style="padding: 6px;">P95</th>
+                        <th style="padding: 6px;">Average</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                        <td style="padding: 6px; font-weight:600;">ASR (Whisper)</td>
+                        <td>{asr_p50}</td>
+                        <td>{asr_p95}</td>
+                        <td>{asr_avg}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                        <td style="padding: 6px; font-weight:600;">LLM RAG</td>
+                        <td>{llm_p50}</td>
+                        <td>{llm_p95}</td>
+                        <td>{llm_avg}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                        <td style="padding: 6px; font-weight:600;">Signal Detection</td>
+                        <td>{sig_p50}</td>
+                        <td>{sig_p95}</td>
+                        <td>{sig_avg}</td>
+                    </tr>
+                    <tr style="border-top: 1px solid rgba(255,255,255,0.1); background: rgba(99,102,241,0.05); color:#a855f7; font-weight:bold;">
+                        <td style="padding: 8px; font-weight:800;">End-to-End Total</td>
+                        <td>{e2e_p50}</td>
+                        <td>{e2e_p95}</td>
+                        <td>{e2e_avg}</td>
+                    </tr>
+                </tbody>
+            </table>
+            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        if st.session_state.live_logs:
             st.markdown("---")
-            with st.expander("📝 Real-Time System Log Database (JSON Inspector)"):
-                st.json(st.session_state.simulation_db_logs)
+            with st.expander("📝 Real-Time System Log Database"):
+                st.json(st.session_state.live_logs)

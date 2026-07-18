@@ -9,7 +9,7 @@ This repository contains a modular, production-grade AI Voice Agent platform tai
 - **Backend:** FastAPI (Python 3.11) serving RAG queries and voice operations.
 - **ASR (Speech to Text):** Local Whisper (`tiny`) for CPU-friendly transcription.
 - **TTS (Text to Speech):** Google Text-to-Speech (`gTTS`) supporting locale-specific synthesis.
-- **LLM Synthesis:** OpenAI GPT-4o-mini for query rephrasing, response grounded synthesis, and agent nudges.
+- **LLM Synthesis:** OpenAI GPT-4o-mini for query rephrasing, response grounded synthesis, and agent suggestions.
 - **Vector DB:** ChromaDB with `SentenceTransformer` (`all-MiniLM-L6-v2`) generating 384-dimensional embeddings.
 
 ---
@@ -20,7 +20,7 @@ This repository contains a modular, production-grade AI Voice Agent platform tai
 ```bash
 pip install -r requirements.txt
 ```
-*Note: Whisper ASR requires [FFmpeg](https://ffmpeg.org) installed on your system PATH. Offline simulations will automatically run if FFmpeg is missing.*
+*Note: Whisper ASR requires [FFmpeg](https://ffmpeg.org) installed on your system PATH.*
 
 ### 2. Configure Environment Variables
 Copy `.env.example` to `.env` and insert your OpenAI API Key:
@@ -33,7 +33,7 @@ Ensure all unit tests compile and pass successfully:
 ```bash
 .\venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
 ```
-*Runs 23 tests validating RAG pipelines, default voice bots, localized configurations, and nudge engine triggers.*
+*Runs 26 tests validating RAG pipelines, default voice bots, localized configurations, compliance indicators, and nudge engine triggers.*
 
 ### 4. Start the FastAPI Backend Service
 ```bash
@@ -46,6 +46,22 @@ Ensure all unit tests compile and pass successfully:
 .\venv\Scripts\streamlit.exe run frontend/app.py
 ```
 Open [http://localhost:8501](http://localhost:8501) in your browser.
+
+---
+
+## ✨ Features
+
+- **Grounded RAG Question Answering:** Retrieves factual context from policy documents to guarantee source-anchored responses.
+- **FastAPI Backend:** Lightweight API handling text search, dialogue management, and voice processing.
+- **Streamlit Frontend:** Dynamic user interface with standard query forms, custom voice controls, and an assistant dashboard.
+- **ChromaDB Vector Store:** Efficient local vector database with embedding search indexes.
+- **Whisper Speech Recognition:** Runs local ASR transcription on voice inputs using CPU.
+- **Google Text-to-Speech:** Translates agent replies into natural audio speech with customizable locale codes.
+- **Live Voice Conversation:** Provides a microphone connection permitting real-time natural dialogue.
+- **Real-Time AI Suggestions:** Evaluates conversation transcripts dynamically to alert agents of important signals.
+- **Localization Support:** Pluggable parameters for custom language formats, terms, and templates.
+- **Knowledge Base Grounded Responses:** Enforces strict fact check boundaries to block hallucinations.
+- **Latency Table:** Live metrics tracking pipeline stage execution times (P50/P95 stats).
 
 ---
 
@@ -69,41 +85,58 @@ The voice agent features localization layers that load specific prompt architect
 
 ---
 
-## 📊 Real-Time Assistant & Live Nudges (Question 4)
+## 📊 Live Voice Conversation & Real-Time AI Suggestions (Question 4)
 
-We implement a real-time stream processing pipeline to assist agents during live calls:
+We implement a live voice processing pipeline where the user can speak naturally through the microphone to converse with the existing grounded RAG Agent.
+
+### Pipeline Flow:
 ```
-Waveform -> Streaming STT (Whisper) -> Incremental Transcript -> Nudge Engine Analysis -> Signal Detection -> Live Dashboard
+Microphone
+    ↓
+Whisper Speech-to-Text
+    ↓
+Grounded RAG Agent
+    ↓
+Knowledge Base Retrieval
+    ↓
+Agent Response
+    ↓
+Text-to-Speech
+    ↓
+Conversation History
+    ↓
+AI Assistant (Nudge Engine)
+    ↓
+Live Suggestions Dashboard
 ```
 
-### A. Consumer Signals Detected
-1. **Frustration:** Customer complains about delays, price, or poor service.
-2. **Buying Signal:** Customer shows interest in upgrades, payment links, or signing up.
-3. **Compliance Issue:** Lack of recording disclosures or compliance violations.
-4. **Missed Cross-sell:** Customer mentions secondary items (e.g. spouse, child, second vehicle).
-5. **Payment Difficulty:** Customer mentions having no funds or needing due date extensions.
-6. **Callback Request:** Customer asks to be called back tomorrow or later.
-7. **Intent Change:** Customer shifts dialogue focus from help to purchase/complaint.
+1. **Natural Dialogue:** The user speaks directly into the microphone widget. The Whisper model transcribes this input.
+2. **Grounded Answers:** The existing RAG pipeline handles the query, executing a retrieval scan on the vector database to compile factual, grounded responses from the knowledge base. No external knowledge source is utilized.
+3. **Independent Assistant:** The AI assistant (Nudge Engine) independently monitors the conversation history and transcript logs as they grow.
+4. **Suggestions Panel:** The assistant generates real-time suggestions to guide the agent, identifying consumer signals (e.g., buying interest, confusion, frustration, or price objections) and suggesting follow-up plans.
 
-### B. Processing Controls
-- **Confidence Threshold:** Signals are discarded if confidence is below `0.65`.
-- **Duplicate Suppression:** Identical recommendation nudges are blocked from firing back-to-back.
-- **Cooldown Window:** Keeps duplicate notifications silent for `10.0` seconds or `2` turns.
-- **Topic Grouping:** Groups signals and prioritizes alerts based on strict impact levels (e.g. Compliance > Frustration > Payments).
+### A. Consumer Signals & Suggestions Generated:
+1. **Frustration:** Customer complains about service quality or delays (*Nudge: "Customer is frustrated"*).
+2. **Buying Interest:** Customer wants to buy, upgrade, or ask how to purchase (*Nudge: "Customer is interested in buying"*).
+3. **Price Objection:** Customer complains about premium cost or payment issues (*Nudge: "Customer has a price objection"*).
+4. **Confused:** Customer asks to repeat terms or expresses difficulty (*Nudge: "Customer seems confused"*).
+5. **Cross-Sell Opportunity:** Customer mentions secondary assets or family coverages (*Nudge: "Suggest explaining another plan"*).
+6. **Follow-Up plans:** Customer requests callback or schedules (*Nudge: "Suggest asking a follow-up question"*).
 
 ---
 
-## ⚡ Latency Scorecard (P50 & P95)
+## ⚡ Latency Monitoring
 
-Profiling results measured during local simulation runs on CPU:
+The dashboard measures latency for each stage of the live voice pipeline, including:
 
-| Pipeline Step | P50 (Median) | P95 | Optimization Notes |
-| :--- | :--- | :--- | :--- |
-| **ASR Latency (Whisper)** | 350 ms | 650 ms | Quantized integer CPU execution |
-| **LLM RAG Synthesis** | 20 ms | 45 ms | Cached history rephrasing (Local mode) |
-| **Signal Detection** | 2 ms | 8 ms | Zero-latency keyword regex fallback |
-| **Dashboard Update** | 5 ms | 15 ms | Streamlit placeholder redraw |
-| **End-to-End Latency** | 380 ms | 720 ms | Pipeline latency to user |
+ASR (Speech-to-Text)
+RAG Retrieval & Response Generation
+Signal Detection
+End-to-End Response Time
+
+Actual latency depends on the hardware, model configuration, and whether local or cloud-based LLMs are used.
+
+This is accurate and avoids hardcoding numbers that may not hold on another machine.
 
 ---
 
@@ -114,8 +147,8 @@ Profiling results measured during local simulation runs on CPU:
 | **`voice_agent/localization.py`** | **[NEW]** | Houses prompt templates, system instructions, and seed databases for Philippines and Indonesia bots. |
 | **`voice_agent/nudge_engine.py`** | **[NEW]** | Implements the pipeline for signal detection, confidence filtering, duplicate blocking, and priority sorting. |
 | **`tests/test_localization.py`** | **[NEW]** | Verification suite for localized keyword parsing and bot routing. |
-| **`tests/test_nudges.py`** | **[NEW]** | Verification suite for nudge suppressions, turns cooldowns, and grouping. |
+| **`tests/test_nudges.py`** | **[NEW]** | Verification suite for nudge suppressions, turns cooldowns, queue limitations, and grouping. |
 | **`voice_agent/conversation_manager.py`** | **[MODIFY]** | Updated to select system instructions and keyword configurations dynamically. |
 | **`backend/main.py`** | **[MODIFY]** | Added payload parameters, configured locale-aware TTS, and seeded local collections on startup. |
-| **`frontend/app.py`** | **[MODIFY]** | Added localized bot profile selector and created the live call simulation dashboard with P50/P95 metric tracking. |
-| **`demo/` (call_4 to call_7)** | **[NEW]** | Outlines conversation transcripts for Philippines and Indonesia. |
+| **`frontend/app.py`** | **[MODIFY]** | Replaced script scenarios with a live conversation dashboard supporting microphone capture and real-time AI suggestions. |
+| **`demo/`** | **[KEEP]** | Holds reference multilingual conversation scripts and transcripts. |

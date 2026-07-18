@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  db:
+    image: ankane/pgvector:latest
+    container_name: integrated_postgres
+    environment:
+      POSTGRES_DB: integrated_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d integrated_ai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: integrated_api_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/integrated_ai
+      - OPENAI_API_KEY=your_key_here
+      - DEEPGRAM_API_KEY=your_key_here
+      - ELEVENLABS_API_KEY=your_key_here
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

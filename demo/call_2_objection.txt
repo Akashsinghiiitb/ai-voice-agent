@@ -1,0 +1,14 @@
+[Call Scenario 2: Value/Price Objection Handling]
+
+Customer: "Your policies seem extremely expensive, I don't think I really need health insurance anyway."
+
+STT Output: "your policies seem extremely expensive i dont think i really need health insurance anyway"
+
+Conversation Intent Classification: "objection"
+
+Agent Response Resolution (from conversation manager rules):
+"I understand your concern. Health insurance helps protect against unexpected medical expenses. I can explain the coverage benefits."
+
+Confidence: 100%
+Source: Intelligent Objection Handler
+Page: N/A

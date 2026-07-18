@@ -1,0 +1,12 @@
+[Call Scenario 1: Normal RAG Policy Inquiry]
+
+Customer: "Hello, I wanted to ask what is the waiting period for cataract surgery under my health insurance policy?"
+
+STT Output: "what is the waiting period for cataract surgery under my health insurance policy"
+
+Agent RAG Retrieval:
+- Chunks matched: "Cataract surgery is subject to a 24-month (2 years) waiting period..."
+- Source: official_uiic_terms.pdf (Page 4)
+- Confidence: 94%
+
+Agent Voice Response: "According to your UIIC policy guidelines, cataract surgery has a waiting period of 24 months, with a maximum coverage limit of Rs. 20,000 per eye."

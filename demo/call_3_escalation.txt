@@ -1,0 +1,14 @@
+[Call Scenario 3: Human Agent Escalation]
+
+Customer: "Look, I have a complaint about this cover. Connect me with a customer support representative or supervisor right now."
+
+STT Output: "look i have a complaint about this cover connect me with a customer support representative or supervisor right now"
+
+Conversation Intent Classification: "escalate"
+
+Agent Response Resolution (from conversation manager rules):
+"I will connect you with a customer support representative."
+
+Confidence: 100%
+Source: Escalation Router
+Page: N/A

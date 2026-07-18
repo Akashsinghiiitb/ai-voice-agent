@@ -97,5 +97,52 @@ class TestNudgeEngine(unittest.TestCase):
         self.assertEqual(res["signal"], "customer_frustration")
         self.assertEqual(res["nudge"], "Recommend empathy statement")
 
+    def test_compliance_and_risk_signals(self):
+        # Test compliance gap check (forgot recording warning)
+        res_comp = self.engine.process_transcript("Are you recording this call? Legal privacy.", "session_comp", 0)
+        self.assertEqual(res_comp["signal"], "compliance_issue")
+        self.assertIn("recording disclosure", res_comp["nudge"].lower())
+
+        # Test risk statement (unsupported day-one cover promise)
+        res_risk = self.engine.process_transcript("Yes pre-existing disease immediate cover from day 1.", "session_risk", 0)
+        self.assertEqual(res_risk["signal"], "risk_statement")
+        self.assertIn("standard 48-month waiting period", res_risk["nudge"].lower())
+
+        # Test escalation request
+        res_esc = self.engine.process_transcript("Let me speak to your supervisor or manager right now.", "session_esc", 0)
+        self.assertEqual(res_esc["signal"], "escalation_requirement")
+        self.assertIn("transfer the call to a human supervisor", res_esc["nudge"].lower())
+
+    def test_queue_limitations(self):
+        # Trigger 6 distinct signals to exceed the max_active_nudges limit (default 5)
+        self.engine.max_active_nudges = 5
+        self.engine.run_llm_detection = lambda t: [
+            {"signal": "buying_signal", "confidence": 0.90, "nudge": "A"},
+            {"signal": "customer_frustration", "confidence": 0.90, "nudge": "B"},
+            {"signal": "compliance_issue", "confidence": 0.90, "nudge": "C"},
+            {"signal": "payment_difficulty", "confidence": 0.90, "nudge": "D"},
+            {"signal": "callback_request", "confidence": 0.90, "nudge": "E"},
+            {"signal": "intent_change", "confidence": 0.90, "nudge": "F"}
+        ]
+        res = self.engine.process_transcript("test active queue limit exceed", "session_limit", 0)
+        # Verify queue is capped at 5
+        self.assertEqual(len(res["active_nudges"]), 5)
+
+    def test_expiry_pruning(self):
+        self.engine.run_llm_detection = lambda t: [
+            {"signal": "buying_signal", "confidence": 0.90, "nudge": "Purchase insurance"}
+        ]
+        res1 = self.engine.process_transcript("buy now", "session_expiry", 0)
+        self.assertEqual(len(res1["active_nudges"]), 1)
+
+        # Manually alter the active nudge's expires_at timestamp to be in the past
+        self.engine.session_states["session_expiry"]["active_nudges"][0]["expires_at"] = time.time() - 1.0
+
+        # Triggering a blank check - the expired nudge should be pruned
+        self.engine.run_llm_detection = lambda t: []
+        res2 = self.engine.process_transcript("blank text", "session_expiry", 1)
+        self.assertEqual(len(res2["active_nudges"]), 0)
+
 if __name__ == "__main__":
     unittest.main()
+

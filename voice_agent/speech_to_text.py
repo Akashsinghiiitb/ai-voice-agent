@@ -13,18 +13,46 @@ class SpeechToText:
         self.import_type = None
 
         try:
+            # Optional psutil diagnostics to observe memory delta when loading ASR model
+            try:
+                import psutil
+            except Exception:
+                psutil = None
+
             from faster_whisper import WhisperModel
+
             self.import_type = "faster-whisper"
+            if psutil:
+                proc = psutil.Process()
+                before = proc.memory_info().rss / (1024 * 1024)
+                print(f"Memory before Whisper load: {before:.1f} MB")
+
             # Load faster-whisper model on CPU using 8-bit integer quantization to save RAM
             self.model = WhisperModel(
                 self.model_name, device="cpu", compute_type="int8"
             )
+            if psutil:
+                after = proc.memory_info().rss / (1024 * 1024)
+                print(f"Memory after Whisper load: {after:.1f} MB")
+
             print(f"Loaded faster-whisper model '{self.model_name}' on CPU.")
         except ImportError:
             try:
+                try:
+                    import psutil
+                except Exception:
+                    psutil = None
                 import whisper
+
                 self.import_type = "whisper"
+                if psutil:
+                    proc = psutil.Process()
+                    before = proc.memory_info().rss / (1024 * 1024)
+                    print(f"Memory before Whisper(load_model) load: {before:.1f} MB")
                 self.model = whisper.load_model(self.model_name)
+                if psutil:
+                    after = proc.memory_info().rss / (1024 * 1024)
+                    print(f"Memory after Whisper(load_model) load: {after:.1f} MB")
                 print(f"Loaded openai-whisper model '{self.model_name}' on CPU.")
             except ImportError:
                 raise ImportError(
@@ -39,9 +67,21 @@ class SpeechToText:
                 f"Failed to load faster-whisper: {e}. Falling back to openai-whisper if available."
             )
             try:
+                try:
+                    import psutil
+                except Exception:
+                    psutil = None
                 import whisper
+
                 self.import_type = "whisper"
+                if psutil:
+                    proc = psutil.Process()
+                    before = proc.memory_info().rss / (1024 * 1024)
+                    print(f"Memory before Whisper(load_model) load: {before:.1f} MB")
                 self.model = whisper.load_model(self.model_name)
+                if psutil:
+                    after = proc.memory_info().rss / (1024 * 1024)
+                    print(f"Memory after Whisper(load_model) load: {after:.1f} MB")
                 print(f"Loaded openai-whisper model '{self.model_name}' on CPU.")
             except Exception as e_inner:
                 print(f"Failed to load openai-whisper fallback: {e_inner}")
@@ -52,7 +92,6 @@ class SpeechToText:
                 "Neither faster-whisper nor openai-whisper could be loaded. "
                 "Please verify your virtual environment installations and CPU compatibility."
             )
-
 
     def transcribe(self, audio_path: str) -> str:
         """

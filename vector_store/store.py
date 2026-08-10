@@ -14,31 +14,33 @@ class ChromaVectorStore:
     Manages the ChromaDB client configuration, index persistence,
     document insertion, and semantic similarity searching.
     """
+
     def __init__(self, persist_dir: str = "./db/chroma_db"):
         self.persist_dir = persist_dir
         os.makedirs(os.path.dirname(persist_dir), exist_ok=True)
         self.model = None  # Lazy-loaded on first embedding generation
-        
+
         # Load Chroma Client
         if chromadb:
             # Pass a dummy embedding function to prevent Chroma from instantiating its default models
             class DummyEmbeddingFunction:
                 def __call__(self, input):
                     return []
+
                 def name(self):
                     return "default"
-            
+
             dummy_ef = DummyEmbeddingFunction()
             self.client = chromadb.PersistentClient(path=persist_dir)
             self.collection = self.client.get_or_create_collection(
                 name="health_insurance_kb",
                 metadata={"hnsw:space": "cosine"},
-                embedding_function=dummy_ef
+                embedding_function=dummy_ef,
             )
         else:
             self.client = None
             self.collection = None
-            self.fallback_db = [] # In-memory list backup
+            self.fallback_db = []  # In-memory list backup
             print("Warning: ChromaDB is not installed. Running in-memory lookup mode.")
 
     def has_document(self, record_id: str) -> bool:
@@ -60,13 +62,33 @@ class ChromaVectorStore:
         Generates standard 384-dimensional dense vectors.
         """
         if self.model is None:
+            # Optionally collect lightweight memory diagnostics when loading the model
+            try:
+                import psutil
+            except Exception:
+                psutil = None
+
             try:
                 from sentence_transformers import SentenceTransformer
-                print("Loading SentenceTransformer model 'all-MiniLM-L6-v2' on CPU (lazy)...")
+
+                if psutil:
+                    proc = psutil.Process()
+                    before = proc.memory_info().rss / (1024 * 1024)
+                    print(f"Memory before embedding model load: {before:.1f} MB")
+
+                print(
+                    "Loading SentenceTransformer model 'all-MiniLM-L6-v2' on CPU (lazy)..."
+                )
                 # Force CPU execution to prevent GPU/CUDA initialization
                 self.model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+
+                if psutil:
+                    after = proc.memory_info().rss / (1024 * 1024)
+                    print(f"Memory after embedding model load: {after:.1f} MB")
             except ImportError:
-                print("Warning: SentenceTransformers is not installed. running in mock vector mode.")
+                print(
+                    "Warning: SentenceTransformers is not installed. running in mock vector mode."
+                )
                 self.model = "fallback"
 
         if self.model != "fallback":
@@ -88,14 +110,14 @@ class ChromaVectorStore:
         embeddings = []
         texts = []
         metadatas = []
-        
+
         for idx, doc in enumerate(documents):
             chunk_id = doc.get("record_id", f"chunk_{idx}")
             content = doc.get("content", "")
-            
+
             # Generate embedding vector
             vector = self.get_embedding(content)
-            
+
             # Filter and prepare metadata values
             meta = {
                 "title": str(doc.get("title", "Unknown")),
@@ -105,29 +127,28 @@ class ChromaVectorStore:
                 "section": str(doc.get("section", "General")),
                 "url": str(doc.get("url", "")),
                 "version": str(doc.get("version", "1.0")),
-                "timestamp": str(doc.get("timestamp", ""))
+                "timestamp": str(doc.get("timestamp", "")),
             }
-            
+
             ids.append(chunk_id)
             embeddings.append(vector)
             texts.append(content)
             metadatas.append(meta)
-            
+
             # Save to fallback in case Chroma is absent
             if not self.collection:
-                self.fallback_db.append({
-                    "id": chunk_id,
-                    "content": content,
-                    "embedding": vector,
-                    "metadata": meta
-                })
+                self.fallback_db.append(
+                    {
+                        "id": chunk_id,
+                        "content": content,
+                        "embedding": vector,
+                        "metadata": meta,
+                    }
+                )
 
         if self.collection:
             self.collection.add(
-                ids=ids,
-                embeddings=embeddings,
-                documents=texts,
-                metadatas=metadatas
+                ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas
             )
         print(f"Ingested {len(documents)} document chunks into vector database.")
 
@@ -140,8 +161,7 @@ class ChromaVectorStore:
 
         if self.collection:
             res = self.collection.query(
-                query_embeddings=[query_vector],
-                n_results=limit
+                query_embeddings=[query_vector], n_results=limit
             )
             # Format results
             if res and res["documents"]:
@@ -149,13 +169,15 @@ class ChromaVectorStore:
                     # Convert distance to similarity score
                     dist = res["distances"][0][i] if res["distances"] else 1.0
                     similarity = 1.0 - float(dist)
-                    
-                    results.append({
-                        "id": res["ids"][0][i],
-                        "content": res["documents"][0][i],
-                        "metadata": res["metadatas"][0][i],
-                        "score": similarity
-                    })
+
+                    results.append(
+                        {
+                            "id": res["ids"][0][i],
+                            "content": res["documents"][0][i],
+                            "metadata": res["metadatas"][0][i],
+                            "score": similarity,
+                        }
+                    )
         else:
             # Fallback memory cosine similarity calculation
             candidates = []
@@ -163,16 +185,18 @@ class ChromaVectorStore:
                 # Cosine similarity calculation
                 dot_product = np.dot(query_vector, item["embedding"])
                 candidates.append((dot_product, item))
-                
+
             # Sort by dot product score
             candidates.sort(key=lambda x: x[0], reverse=True)
-            
+
             for score, item in candidates[:limit]:
-                results.append({
-                    "id": item["id"],
-                    "content": item["content"],
-                    "metadata": item["metadata"],
-                    "score": float(score)
-                })
-                
+                results.append(
+                    {
+                        "id": item["id"],
+                        "content": item["content"],
+                        "metadata": item["metadata"],
+                        "score": float(score),
+                    }
+                )
+
         return results

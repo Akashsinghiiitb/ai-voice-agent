@@ -19,3 +19,4 @@ torch>=2.0.0; sys_platform != 'linux'
 ffmpeg-python>=0.2.0
 python-multipart>=0.0.6
 openai
+psutil>=5.9.0

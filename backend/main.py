@@ -1,4 +1,6 @@
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 import sys
 
 # Ensure project root is in python path for internal imports
@@ -6,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import uuid
 import openai
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
@@ -246,8 +248,14 @@ async def ask_question(payload: QueryPayload):
 # --- Voice Agent Extension ---
 
 # Initialize Voice Modules with shared store and query resolver injection
-stt_model = SpeechToText()
-tts_model = TextToSpeech()
+stt_model = None
+
+def get_stt_model():
+    global stt_model
+    if stt_model is None:
+        stt_model = SpeechToText()
+    return stt_model
+
 conversation_mgr = ConversationManager(store, resolve_grounded_query)
 
 class VoiceChatPayload(BaseModel):
@@ -276,15 +284,20 @@ async def voice_transcribe(file: UploadFile = File(...)):
     STT Endpoint: Transcribes an uploaded audio file into plain text.
     """
     os.makedirs("./tmp_audio", exist_ok=True)
-    temp_path = f"./tmp_audio/{uuid.uuid4()}_{file.filename}"
+    import re
+    # Sanitize file extension to prevent path traversal or injection
+    file_ext = os.path.splitext(file.filename)[1] if file.filename else ".wav"
+    if not re.match(r'^\.[a-zA-Z0-9]+$', file_ext):
+        file_ext = ".wav"
+    temp_path = f"./tmp_audio/{uuid.uuid4()}{file_ext}"
     
     try:
         # Save temporary uploaded file
         with open(temp_path, "wb") as f:
             f.write(await file.read())
             
-        # Transcribe
-        transcript = stt_model.transcribe(temp_path)
+        # Transcribe using lazy-loaded SpeechToText model
+        transcript = get_stt_model().transcribe(temp_path)
         return {"transcript": transcript}
     except ImportError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -297,6 +310,7 @@ async def voice_transcribe(file: UploadFile = File(...)):
                 os.remove(temp_path)
             except Exception:
                 pass
+
 
 @app.post("/voice/chat", response_model=VoiceChatResponse)
 async def voice_chat(payload: VoiceChatPayload):
@@ -328,15 +342,19 @@ async def voice_chat(payload: VoiceChatPayload):
         chunk_texts = [c.get("content", "")[:75] + "..." for c in chunks] if isinstance(chunks, list) else []
         scores = [c.get("score", 0.0) for c in chunks] if isinstance(chunks, list) else []
         
+        # Truncate text values for logging checks to maintain memory-safe logs
+        log_question = payload.question[:100] + "..." if len(payload.question) > 100 else payload.question
+        log_answer = res.get("answer", "")[:100] + "..." if len(res.get("answer", "")) > 100 else res.get("answer", "")
+
         print("\n================================")
         print(f"VOICE SESSION (CHAT ROUTING) - LOCALE: {payload.bot_type.upper()}")
         print(f"Session ID: {session_id}")
-        print(f"Transcript: {payload.question}")
+        print(f"Transcript: {log_question}")
         print(f"Detected Intent: {res['intent'].upper()}")
         print(f"Retrieved Chunks: {chunk_texts}")
         print(f"Similarity Scores: {scores}")
         print(f"Chosen Source: {res.get('source')}")
-        print(f"Final Answer: {res.get('answer')}")
+        print(f"Final Answer: {log_answer}")
         print(f"LLM Latency: {llm_latency*1000:.1f}ms")
         print("Speech Generation Time: Pending synthesis endpoint call...")
         print("================================\n")
@@ -355,7 +373,7 @@ async def voice_chat(payload: VoiceChatPayload):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/voice/synthesize")
-async def voice_synthesize(payload: VoiceSynthesizePayload):
+async def voice_synthesize(payload: VoiceSynthesizePayload, background_tasks: BackgroundTasks):
     """
     TTS Endpoint: Synthesizes text into an MP3 file using the locale language, returning a FileResponse.
     Tracks and prints consolidated conversation logs.
@@ -407,10 +425,13 @@ async def voice_synthesize(payload: VoiceSynthesizePayload):
         
         total_time = llm_latency + tts_latency
         
+        # Truncate text values for logging checks to maintain memory-safe logs
+        log_query = query[:100] + "..." if len(query) > 100 else query
+        
         print("\n================================")
         print(f"VOICE SESSION COMPLETE AUDIT - LOCALE: {bot_type.upper()}")
         print(f"* Session ID: {payload.session_id or 'N/A'}")
-        print(f"* Transcript: {query}")
+        print(f"* Transcript: {log_query}")
         print(f"* Detected Intent: {intent.upper()}")
         print(f"* Retrieved Chunks: {chunks_txt}")
         print(f"* Similarity Scores: {scores}")
@@ -420,15 +441,33 @@ async def voice_synthesize(payload: VoiceSynthesizePayload):
         print(f"* Total Processing Time: {total_time*1000:.1f}ms")
         print("================================\n")
         
+        # Register background task to remove the temporary MP3 file after sending the response
+        background_tasks.add_task(os.remove, temp_out_path)
+        
         return FileResponse(
             path=temp_out_path,
             media_type="audio/mpeg",
-            filename="response.mp3"
+            filename="response.mp3",
+            background=background_tasks
         )
     except ImportError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        # Clean up in case of failure before FileResponse
+        if os.path.exists(temp_out_path):
+            try:
+                os.remove(temp_out_path)
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail=f"TTS compilation failed: {str(e)}")
+
+
+@app.get("/health")
+async def health():
+    """
+    Lightweight health-check endpoint that does not load Whisper, TTS, or embedding models.
+    """
+    return {"status": "ok"}
 
 
 # --- Startup Seeding of Localized Knowledge Chunks ---
@@ -438,13 +477,11 @@ async def seed_localized_data():
     Pre-populates ChromaDB on startup with localized FAQ rules for Pioneer Life and Adira Finance.
     """
     try:
-        # Check if Pioneer documents exist
-        results_ph = store.query("Pioneer Life Insurance Policy Guidelines", limit=1)
-        has_ph = results_ph and any("pioneer" in str(r["metadata"].get("source", "")).lower() for r in results_ph)
+        # Check if Pioneer documents exist by checking metadata directly (prevents lazy-loading embedding model at startup)
+        has_ph = store.has_document("ph_policy_0")
         
-        # Check if Adira documents exist
-        results_id = store.query("Adira Finance Terms of Service", limit=1)
-        has_id = results_id and any("adira" in str(r["metadata"].get("source", "")).lower() for r in results_id)
+        # Check if Adira documents exist by checking metadata directly
+        has_id = store.has_document("id_policy_0")
         
         if not has_ph:
             print("Seeding Pioneer Life (Philippines) knowledge chunks...")
@@ -481,3 +518,4 @@ async def seed_localized_data():
         print("Localized DB seeding checks complete.")
     except Exception as e:
         print(f"Warning during localized seeding check: {e}")
+

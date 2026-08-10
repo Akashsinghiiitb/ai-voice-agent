@@ -1,17 +1,13 @@
 import os
 import numpy as np
 
-# Try importing ChromaDB and SentenceTransformers
+# Try importing ChromaDB
 try:
     import chromadb
     from chromadb.config import Settings
 except ImportError:
     chromadb = None
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    SentenceTransformer = None
 
 class ChromaVectorStore:
     """
@@ -21,20 +17,23 @@ class ChromaVectorStore:
     def __init__(self, persist_dir: str = "./db/chroma_db"):
         self.persist_dir = persist_dir
         os.makedirs(os.path.dirname(persist_dir), exist_ok=True)
+        self.model = None  # Lazy-loaded on first embedding generation
         
-        # Load Sentence Transformers model
-        if SentenceTransformer:
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
-        else:
-            self.model = None
-            print("Warning: SentenceTransformers is not installed. running in mock vector mode.")
-            
         # Load Chroma Client
         if chromadb:
+            # Pass a dummy embedding function to prevent Chroma from instantiating its default models
+            class DummyEmbeddingFunction:
+                def __call__(self, input):
+                    return []
+                def name(self):
+                    return "default"
+            
+            dummy_ef = DummyEmbeddingFunction()
             self.client = chromadb.PersistentClient(path=persist_dir)
             self.collection = self.client.get_or_create_collection(
                 name="health_insurance_kb",
-                metadata={"hnsw:space": "cosine"}
+                metadata={"hnsw:space": "cosine"},
+                embedding_function=dummy_ef
             )
         else:
             self.client = None
@@ -42,11 +41,35 @@ class ChromaVectorStore:
             self.fallback_db = [] # In-memory list backup
             print("Warning: ChromaDB is not installed. Running in-memory lookup mode.")
 
+    def has_document(self, record_id: str) -> bool:
+        """
+        Checks if a document exists by ID without using or calculating embeddings.
+        """
+        if self.collection:
+            try:
+                res = self.collection.get(ids=[record_id])
+                return res and len(res.get("ids", [])) > 0
+            except Exception as e:
+                print(f"Error checking document presence for {record_id}: {e}")
+                return False
+        else:
+            return any(item["id"] == record_id for item in self.fallback_db)
+
     def get_embedding(self, text: str) -> list[float]:
         """
         Generates standard 384-dimensional dense vectors.
         """
-        if self.model:
+        if self.model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+                print("Loading SentenceTransformer model 'all-MiniLM-L6-v2' on CPU (lazy)...")
+                # Force CPU execution to prevent GPU/CUDA initialization
+                self.model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            except ImportError:
+                print("Warning: SentenceTransformers is not installed. running in mock vector mode.")
+                self.model = "fallback"
+
+        if self.model != "fallback":
             return self.model.encode(text).tolist()
         else:
             # Deterministic mock hash vectors for fallback compatibility

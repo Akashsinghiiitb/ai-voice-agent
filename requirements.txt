@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 fastapi>=0.100.0
 uvicorn>=0.22.0
 pydantic>=2.0.0
@@ -13,8 +14,8 @@ gTTS>=2.3.2
 openai-whisper>=20231117
 faster-whisper>=0.10.0
 transformers>=4.35.0
-torch>=2.0.0
-torchvision>=0.15.0
+torch>=2.0.0+cpu; sys_platform == 'linux'
+torch>=2.0.0; sys_platform != 'linux'
 ffmpeg-python>=0.2.0
 python-multipart>=0.0.6
 openai

@@ -23,12 +23,6 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
-from vector_store.store import ChromaVectorStore
-
-# Import voice agent modules
-from voice_agent.speech_to_text import SpeechToText
-from voice_agent.text_to_speech import TextToSpeech
-from voice_agent.conversation_manager import ConversationManager
 from voice_agent.localization import LOCALIZATION_CONFIGS
 
 app = FastAPI(
@@ -42,16 +36,18 @@ store = None
 conversation_mgr = None
 
 
-def get_store() -> ChromaVectorStore:
+def get_store() -> "ChromaVectorStore":
     global store
     if store is None:
+        from vector_store.store import ChromaVectorStore
         store = ChromaVectorStore()
     return store
 
 
-def get_conversation_mgr() -> ConversationManager:
+def get_conversation_mgr() -> "ConversationManager":
     global conversation_mgr
     if conversation_mgr is None:
+        from voice_agent.conversation_manager import ConversationManager
         conversation_mgr = ConversationManager(get_store(), resolve_grounded_query)
     return conversation_mgr
 
@@ -100,7 +96,7 @@ def get_priority_score(category: str) -> int:
 
 def resolve_grounded_query(
     question: str,
-    store_instance: ChromaVectorStore,
+    store_instance: "ChromaVectorStore",
     history: list = None,
     bot_type: str = "default",
 ) -> dict:
@@ -321,6 +317,7 @@ stt_model = None
 def get_stt_model():
     global stt_model
     if stt_model is None:
+        from voice_agent.speech_to_text import SpeechToText
         stt_model = SpeechToText()
     return stt_model
 
@@ -503,6 +500,7 @@ async def voice_synthesize(
 
     try:
         # Instantiate a locale-aware TTS synthesizer
+        from voice_agent.text_to_speech import TextToSpeech
         local_tts = TextToSpeech(lang=tts_lang)
         local_tts.synthesize(payload.text, temp_out_path)
 
@@ -595,6 +593,12 @@ async def seed_localized_data():
     Pre-populates ChromaDB on startup with localized FAQ rules for Pioneer Life and Adira Finance.
     """
     try:
+        # Avoid loading ChromaDB client completely during startup if database already exists
+        db_file = "./db/chroma_db/chroma.sqlite3"
+        if os.path.exists(db_file) and os.path.getsize(db_file) > 1024 * 1024:
+            print("Localized DB seeding checks complete (skipped: database exists).")
+            return
+
         # Check if Pioneer documents exist by checking metadata directly (prevents lazy-loading embedding model at startup)
         has_ph = get_store().has_document("ph_policy_0")
 
@@ -606,19 +610,19 @@ async def seed_localized_data():
             ph_docs = LOCALIZATION_CONFIGS["philippines"]["seed_data"]
             get_store().add_documents(
                 [
-                    {
-                        "record_id": f"ph_policy_{idx}",
-                        "title": d["title"],
-                        "content": d["content"],
-                        "category": d["category"],
-                        "source": d["source"],
-                        "page": d["page"],
-                        "section": d["section"],
-                        "url": d["url"],
-                        "version": "1.0",
-                        "timestamp": "2026-07-18",
-                    }
-                    for idx, d in enumerate(ph_docs)
+                     {
+                         "record_id": f"ph_policy_{idx}",
+                         "title": d["title"],
+                         "content": d["content"],
+                         "category": d["category"],
+                         "source": d["source"],
+                         "page": d["page"],
+                         "section": d["section"],
+                         "url": d["url"],
+                         "version": "1.0",
+                         "timestamp": "2026-07-18",
+                     }
+                     for idx, d in enumerate(ph_docs)
                 ]
             )
 
@@ -627,19 +631,19 @@ async def seed_localized_data():
             id_docs = LOCALIZATION_CONFIGS["indonesia"]["seed_data"]
             get_store().add_documents(
                 [
-                    {
-                        "record_id": f"id_policy_{idx}",
-                        "title": d["title"],
-                        "content": d["content"],
-                        "category": d["category"],
-                        "source": d["source"],
-                        "page": d["page"],
-                        "section": d["section"],
-                        "url": d["url"],
-                        "version": "1.0",
-                        "timestamp": "2026-07-18",
-                    }
-                    for idx, d in enumerate(id_docs)
+                     {
+                         "record_id": f"id_policy_{idx}",
+                         "title": d["title"],
+                         "content": d["content"],
+                         "category": d["category"],
+                         "source": d["source"],
+                         "page": d["page"],
+                         "section": d["section"],
+                         "url": d["url"],
+                         "version": "1.0",
+                         "timestamp": "2026-07-18",
+                     }
+                     for idx, d in enumerate(id_docs)
                 ]
             )
 

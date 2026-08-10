@@ -1,13 +1,6 @@
 import os
 import numpy as np
 
-# Try importing ChromaDB
-try:
-    import chromadb
-    from chromadb.config import Settings
-except ImportError:
-    chromadb = None
-
 
 class ChromaVectorStore:
     """
@@ -19,6 +12,13 @@ class ChromaVectorStore:
         self.persist_dir = persist_dir
         os.makedirs(os.path.dirname(persist_dir), exist_ok=True)
         self.model = None  # Lazy-loaded on first embedding generation
+
+        # Lazy load chromadb on client creation to reduce startup RAM
+        try:
+            import chromadb
+            from chromadb.config import Settings
+        except ImportError:
+            chromadb = None
 
         # Load Chroma Client
         if chromadb:
@@ -59,40 +59,36 @@ class ChromaVectorStore:
 
     def get_embedding(self, text: str) -> list[float]:
         """
-        Generates standard 384-dimensional dense vectors.
+        Generates standard 384-dimensional dense vectors using a memory-optimized ONNX model.
         """
         if self.model is None:
-            # Optionally collect lightweight memory diagnostics when loading the model
             try:
                 import psutil
-            except Exception:
+            except ImportError:
                 psutil = None
 
             try:
-                from sentence_transformers import SentenceTransformer
+                from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
 
                 if psutil:
                     proc = psutil.Process()
                     before = proc.memory_info().rss / (1024 * 1024)
-                    print(f"Memory before embedding model load: {before:.1f} MB")
+                    print(f"Memory before ONNX embedding model load: {before:.1f} MB")
 
-                print(
-                    "Loading SentenceTransformer model 'all-MiniLM-L6-v2' on CPU (lazy)..."
-                )
-                # Force CPU execution to prevent GPU/CUDA initialization
-                self.model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+                self.model = ONNXMiniLM_L6_V2()
 
                 if psutil:
                     after = proc.memory_info().rss / (1024 * 1024)
-                    print(f"Memory after embedding model load: {after:.1f} MB")
-            except ImportError:
+                    print(f"Memory after ONNX embedding model load: {after:.1f} MB")
+            except Exception as e:
                 print(
-                    "Warning: SentenceTransformers is not installed. running in mock vector mode."
+                    f"Warning: ONNXMiniLM_L6_V2 failed to load ({e}). Running in mock vector mode."
                 )
                 self.model = "fallback"
 
         if self.model != "fallback":
-            return self.model.encode(text).tolist()
+            embeddings = self.model([text])
+            return embeddings[0]
         else:
             # Deterministic mock hash vectors for fallback compatibility
             np.random.seed(abs(hash(text)) % (2**32 - 1))

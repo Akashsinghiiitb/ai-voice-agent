@@ -8,3 +8,5 @@ tmp_audio/
 tmp_crawled_doc_*.pdf
 
 db/chroma_db/
+
+*.log

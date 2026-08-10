@@ -6,11 +6,6 @@ from pdf_parser.parser import PDFParser
 from utils.helpers import clean_text, mask_pii, extract_html_structure
 from vector_store.store import ChromaVectorStore
 
-# Import LangChain splitters with fallback option
-try:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
-except ImportError:
-    RecursiveCharacterTextSplitter = None
 
 class IngestionPipeline:
     """
@@ -23,25 +18,55 @@ class IngestionPipeline:
 
     def split_content(self, text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
         """
-        Splits content using RecursiveCharacterTextSplitter or fallback word counts.
+        Splits content recursively by paragraphs, newlines, spaces, or characters
+        to match RecursiveCharacterTextSplitter behavior without requiring LangChain.
         """
-        if RecursiveCharacterTextSplitter:
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=overlap,
-                length_function=len
-            )
-            return splitter.split_text(text)
-        else:
-            # Custom word count splitter fallback
-            words = text.split()
+        separators = ["\n\n", "\n", " ", ""]
+        
+        def _split(t: str, seps: list[str]) -> list[str]:
+            if len(t) <= chunk_size:
+                return [t]
+            if not seps:
+                return [t[i:i + chunk_size] for i in range(0, len(t), chunk_size - overlap)]
+                
+            sep = seps[0]
+            parts = t.split(sep)
             chunks = []
-            i = 0
-            while i < len(words):
-                chunk = words[i:i + chunk_size]
-                chunks.append(" ".join(chunk))
-                i += (chunk_size - overlap)
-            return chunks
+            current = []
+            current_len = 0
+            
+            for part in parts:
+                part_len = len(part)
+                if part_len > chunk_size:
+                    if current:
+                        chunks.append(sep.join(current))
+                        current = []
+                        current_len = 0
+                    chunks.extend(_split(part, seps[1:]))
+                elif current_len + part_len + (len(sep) if current else 0) <= chunk_size:
+                    current.append(part)
+                    current_len += part_len + (len(sep) if len(current) > 1 else 0)
+                else:
+                    if current:
+                        chunks.append(sep.join(current))
+                    current = [part]
+                    current_len = part_len
+                    
+            if current:
+                chunks.append(sep.join(current))
+                
+            # Reconstruct chunks with overlap
+            final_chunks = []
+            for idx, chunk in enumerate(chunks):
+                if idx == 0:
+                    final_chunks.append(chunk)
+                else:
+                    prev = chunks[idx - 1]
+                    overlap_part = prev[-overlap:] if len(prev) > overlap else prev
+                    final_chunks.append(overlap_part + " " + chunk)
+            return final_chunks
+
+        return _split(text, separators)
 
     def run(self, start_url: str = None, local_pdf_paths: list[str] = None) -> dict:
         """
